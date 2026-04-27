@@ -1,5 +1,5 @@
 [project]
-name = "s2cpython"
+name = "s2cpy"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "nautilus-trader[polymarket]>=1.225.0",
+    "requests>=2.33.1",
 ]
 
 [build-system]

@@ -1062,10 +1062,14 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "nautilus-trader", extra = ["polymarket"] },
+    { name = "requests" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "nautilus-trader", extras = ["polymarket"], specifier = ">=1.225.0" }]
+requires-dist = [
+    { name = "nautilus-trader", extras = ["polymarket"], specifier = ">=1.225.0" },
+    { name = "requests", specifier = ">=2.33.1" },
+]
 
 [[package]]
 name = "six"
