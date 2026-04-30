@@ -1,8 +1,7 @@
-from functools import lru_cache
 from typing import Optional
 import os
 import tomllib
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from loguru import logger
 import sys
@@ -82,6 +81,15 @@ class AppSettings(BaseSettings):
         res.environment = running_env
         return res
 
+    @classmethod
+    def get_instance(cls) -> "AppSettings":
+        """进程内单例入口，首次调用时通过 load_config 初始化。"""
+        global _global_settings
+        if _global_settings is None:
+            _global_settings = cls.load_config()
+        assert _global_settings is not None
+        return _global_settings
+
 
 # 辅助函数：深层字典合并（让嵌套的 database、redis 等也能正确覆盖）
 def _deep_update(target: dict, source: dict):
@@ -92,11 +100,18 @@ def _deep_update(target: dict, source: dict):
             target[key] = value
 
 
-# ====================== 使用方式 ======================
-@lru_cache
+_global_settings: AppSettings | None = None
+
+
 def get_global_config() -> AppSettings:
-    """整个项目统一使用这个函数获取配置（单例推荐）"""
-    return AppSettings.load_config()
+    """对外提供全局配置单例。"""
+    return AppSettings.get_instance()
+
+
+def reset_global_config() -> None:
+    """重置全局配置单例（主要用于测试场景）。"""
+    global _global_settings
+    _global_settings = None
 
 
 def setup_gobal_logging(log_config: LogSetting):
@@ -131,4 +146,3 @@ def setup_gobal_logging(log_config: LogSetting):
         )
 
     logger.info(f"日志系统初始化完成，日志级别: {log_config.log_level}")
-
