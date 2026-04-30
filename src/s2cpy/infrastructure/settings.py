@@ -1,10 +1,12 @@
 from functools import lru_cache
-from pathlib import Path
 from typing import Optional
 import os
 import tomllib
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from loguru import logger
+import sys
+from pathlib import Path
 
 
 class LogSetting(BaseModel):
@@ -21,6 +23,7 @@ class LogSetting(BaseModel):
 class AppSettings(BaseSettings):
     instance_name: str = "测试项目"
     environment: str = "development"  # development / production
+    debug: bool = False
     proxy_url: Optional[str] = None
     log: LogSetting = LogSetting()
     # pydantic-settings 配置
@@ -91,17 +94,12 @@ def _deep_update(target: dict, source: dict):
 
 # ====================== 使用方式 ======================
 @lru_cache
-def get_config() -> AppSettings:
+def get_global_config() -> AppSettings:
     """整个项目统一使用这个函数获取配置（单例推荐）"""
     return AppSettings.load_config()
 
 
-from loguru import logger
-import sys
-from pathlib import Path
-
-
-def setup_logging(log_config: LogSetting):
+def setup_gobal_logging(log_config: LogSetting):
     """根据配置初始化 Loguru（项目启动时调用一次）"""
 
     # 先移除默认的处理器（避免重复输出）
@@ -134,12 +132,3 @@ def setup_logging(log_config: LogSetting):
 
     logger.info(f"日志系统初始化完成，日志级别: {log_config.log_level}")
 
-
-# 测试用（直接运行此文件可测试）
-if __name__ == "__main__":
-    config = get_config()
-    setup_logging(config.log)
-    logger.info(f"应用名称: {config.instance_name}")
-    logger.info(f"运行环境: {config.environment}")
-    logger.info(f"代理地址: {config.proxy_url}")
-    # print(config.model_dump_json(indent=2))   # 查看完整配置

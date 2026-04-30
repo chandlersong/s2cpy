@@ -1,0 +1,4 @@
+instance_name = "单元测试模式"
+environment = "unitest"
+
+[log]

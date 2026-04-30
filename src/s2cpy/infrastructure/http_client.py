@@ -2,7 +2,7 @@ import aiohttp
 import asyncio
 from typing import Optional
 
-from s2cpy.infrastructure.settings import get_config
+from s2cpy.infrastructure.settings import get_global_config
 
 
 class HttpClient:
@@ -14,7 +14,7 @@ class HttpClient:
         if cls._session is None or cls._session.closed:
             # 可以在这里统一配置超时、代理、headers 等
             timeout = aiohttp.ClientTimeout(total=30, connect=10)
-            config = get_config()
+            config = get_global_config()
             cls._session = aiohttp.ClientSession(
                 timeout=timeout,
                 proxy=config.proxy_url,  # 如果需要全局代理

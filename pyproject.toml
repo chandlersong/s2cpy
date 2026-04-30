@@ -27,8 +27,25 @@ default = true
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "pytest-env>=1.6.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"                    # 推荐：自动识别 async def test_ 函数
 asyncio_default_fixture_loop_scope = "function"   # 每个测试独立的事件循环，更安全
+markers = [
+    "manual: tests that should not run by default, only manually",
+    # 你可以加多个
+    # "slow: slow running tests",
+    # "integration: integration tests",
+]
+
+env = [
+    "ENV=untest", # 默认使用 testing 环境跑测试
+    "DEBUG=true",
+]
+required_plugins = ["pytest-env"]
+# 默认运行时自动排除 manual 测试
+addopts = [
+    "-m", "not manual",
+]
