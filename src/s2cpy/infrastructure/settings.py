@@ -37,9 +37,14 @@ class AppSettings(BaseSettings):
 
         # 1. 从环境变量获取配置文件路径（用户最关心的问题）
         custom_path = os.getenv("CONFIG_PATH")  # 例如: CONFIG_PATH=/path/to/myconfig.toml
+        log_folder = os.getenv("LOG_FOLDER")
 
         # 默认配置文件路径（按优先级顺序）
-        base_dir = Path(__file__).parent.parent.parent.parent / "config"
+        if log_folder is None:
+            base_dir = Path(__file__).parent.parent.parent.parent / "config"
+        else:
+            base_dir = Path(log_folder)
+
         running_env = os.getenv('ENV', 'dev')
 
         default_files = [
@@ -53,7 +58,7 @@ class AppSettings(BaseSettings):
             config_files = [Path(custom_path)] + [f for f in default_files if f.exists()]
         else:
             config_files = [f for f in default_files if f.exists()]
-
+        logger.info("激活的配置文件为：{}".format(config_files))
         # 开始合并配置
         merged_config: dict = {}
 
