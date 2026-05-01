@@ -1,5 +1,4 @@
 instance_name = "单元测试模式"
 environment = "unitest"
-proxy_url = "http://127.0.0.1:7891"
 [log]
 log_level="DEBUG"

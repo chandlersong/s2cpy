@@ -34,7 +34,7 @@ dev = [
 asyncio_mode = "auto"                    # 推荐：自动识别 async def test_ 函数
 asyncio_default_fixture_loop_scope = "function"   # 每个测试独立的事件循环，更安全
 markers = [
-    "manual: 手工跑的方法，因为有些测试需要通过这种手工去跑一下了解一下，比如一些api的用法这些。",
+    "manual: 手工跑的方式，主要是用于一些用于演示，或者看实际情况的场景。",
     # 你可以加多个
     # "slow: slow running tests",
     # "integration: integration tests",
