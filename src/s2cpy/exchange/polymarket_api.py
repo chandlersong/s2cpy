@@ -14,10 +14,24 @@ from __future__ import annotations
 
 from loguru import logger
 from datetime import timedelta
-from tenacity import retry, wait_random
+from tenacity import retry, wait_random, stop_after_attempt
 
-from s2cpy.exchange.polymarket_io import PublicSearchRequest, PublicSearchResponse
 from s2cpy.infrastructure.http_client import HttpClient
+from s2cpy.model.polymarket_io import (
+    PublicSearchRequest,
+    PublicSearchResponse,
+    parse_series_response,
+    parse_event_response,
+    parse_market_response,
+    Series,
+    Event,
+    Market,
+    SeriesGetRequest,
+    EventGetBySlugRequest,
+    EventGetByIdRequest,
+    MarketGetBySlugRequest,
+    MarketGetByIdRequest,
+)
 
 
 class GammaAPI:
@@ -32,24 +46,99 @@ class GammaAPI:
         """
         self._http_client = HttpClient()
 
-    @retry(wait=wait_random(min=timedelta(milliseconds=100), max=timedelta(milliseconds=200)))
-    async def public_search(self, request: PublicSearchRequest, timeout: float = 30) -> PublicSearchResponse:
+    # ---------------------
+    # Simple resource getters
+    # ---------------------
+
+    async def get_and_parse(self, url: str, parser, params: dict | None = None, timeout: float = 30):
+        """Public helper to perform GET and parse JSON using provided parser.
+
+        This is intentionally public to allow callers to reuse the client's session
+        and status handling. `params` should be a dict of query parameters.
+        """
         session = await self._http_client.get_session()
 
-        try:
-            async with session.get(
-                    f"{GammaAPI.BASE_URL}/public-search",
-                    params=request.model_dump(exclude_none=True),
-                    timeout=timeout,
-            ) as resp:
-                if resp.status == 200:
-                    return PublicSearchResponse.parse_raw(await resp.text())
-                else:
-                    logger.error(f"public-search fail,status code: {resp.status}")
-                    raise RuntimeError(f"public-search fail,status code: {resp.status}")
-        except Exception as e:
-            logger.error(e)
-            raise e
+        async with session.get(url, params=params, timeout=timeout) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                return parser(data)
+            elif resp.status == 404:
+                raise PolymarketNotFoundError(f"Not found: {url}")
+            elif 500 <= resp.status < 600:
+                raise PolymarketServerError(f"Server error {resp.status}: {url}")
+            else:
+                raise PolymarketAPIError(f"Unexpected status {resp.status} for {url}")
+
+    @retry(stop=stop_after_attempt(5),wait=wait_random(min=timedelta(milliseconds=100), max=timedelta(milliseconds=200)))
+    async def public_search(self, request: PublicSearchRequest, timeout: float = 30) -> PublicSearchResponse:
+        url = f"{GammaAPI.BASE_URL}/public-search"
+        params = request.model_dump(exclude_none=True)
+        params.pop("id", None)
+        return await self.get_and_parse(url, PublicSearchResponse.from_api_response, params=params, timeout=timeout)
+
+    async def get_series_by_id(self, request: SeriesGetRequest, timeout: float = 30) -> "Series":
+        """GET /series/{id} -> Series
+
+        Raises PolymarketNotFoundError on 404, PolymarketServerError on 5xx.
+        """
+        url = f"{GammaAPI.BASE_URL}/{f"series/{request.id}".lstrip('/')}"
+        params = request.model_dump(exclude_none=True)
+        params.pop("id", None)
+        return await self.get_and_parse(url, parse_series_response, params=params, timeout=timeout)
+
+    async def get_event_by_slug(self, request: EventGetBySlugRequest, timeout: float = 30) -> Event:
+        """GET /events/{slug} -> Event"""
+        url = f"{GammaAPI.BASE_URL}/{f"events/slug/{request.slug}".lstrip('/')}"
+        params = request.model_dump(exclude_none=True)
+        params.pop("slug", None)
+        return await self.get_and_parse(url, parse_event_response, params=params, timeout=timeout)
+
+    async def get_market_by_slug(self, request: MarketGetBySlugRequest, timeout: float = 30) -> "Market":
+        """GET /markets/{slug} -> Market"""
+        url = f"{GammaAPI.BASE_URL}/{f"markets/{request.slug}".lstrip('/')}"
+        params = request.model_dump(exclude_none=True)
+        params.pop("slug", None)
+        return await self.get_and_parse(url, parse_market_response, params=params, timeout=timeout)
+
+    async def get_market_by_id(self, request: MarketGetByIdRequest, timeout: float = 30) -> "Market":
+        """GET /markets/{id} -> Market"""
+        url = f"{GammaAPI.BASE_URL}/{f"markets/{request.id}".lstrip('/')}"
+        params = request.model_dump(exclude_none=True)
+        params.pop("id", None)
+        return await self.get_and_parse(url, parse_market_response, params=params, timeout=timeout)
+
+    async def get_event_by_id(self, request: EventGetByIdRequest, timeout: float = 30) -> "Event":
+        """GET /events/{id} -> Event"""
+        url = f"{GammaAPI.BASE_URL}/{f"events/{request.id}".lstrip('/')}"
+        params = request.model_dump(exclude_none=True)
+        params.pop("id", None)
+        return await self.get_and_parse(url, parse_event_response, params=params, timeout=timeout)
 
 
-__all__ = ["GammaAPI"]
+# -----------------
+# Exception classes
+# -----------------
+
+
+class PolymarketAPIError(RuntimeError):
+    """Base exception for Polymarket API client errors."""
+
+
+class PolymarketNotFoundError(PolymarketAPIError):
+    """Raised when API returns HTTP 404."""
+
+
+class PolymarketServerError(PolymarketAPIError):
+    """Raised when API returns 5xx server error."""
+
+
+@retry(wait=wait_random(min=timedelta(milliseconds=100), max=timedelta(milliseconds=200)))
+async def _noop_retry_wrapper():
+    """A small wrapper to enable using retry on per-method bases if needed.
+
+    (Kept as placeholder — individual getters currently do not use tenacity.)
+    """
+    return None
+
+
+__all__ = ["GammaAPI", "PolymarketAPIError", "PolymarketNotFoundError", "PolymarketServerError"]

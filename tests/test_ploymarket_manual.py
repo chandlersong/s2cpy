@@ -2,8 +2,8 @@ import pytest
 from loguru import logger
 
 from s2cpy.exchange.polymarket_api import GammaAPI
-from s2cpy.exchange.polymarket_io import PublicSearchRequest, PublicSearchResponse
 from s2cpy.infrastructure.settings import get_global_config, setup_gobal_logging
+from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest
 
 
 @pytest.mark.manual
@@ -36,3 +36,32 @@ async def test_public_search_api():
         else:
             for series in event_series:
                 logger.info(f"series id: {series.id}, slug: {series.slug}")
+
+
+@pytest.mark.manual
+async def test_event_slug_to_series_id():
+    """
+    通过event的slug，去确定合适的series id。然后再根据series id获得最新的event
+    :return:
+    """
+    logger.debug(f"test_event_slug_to_series_id")
+    gamma_api = GammaAPI()
+    event_slug = "btc-updown-15m-1777468500"
+    event_slug_request = EventGetBySlugRequest.build(slug=event_slug)
+    event = await gamma_api.get_event_by_slug(event_slug_request)
+    event_series = event.series
+    if event_series is None:
+        logger.info(f"{event_slug_request.slug} has no series")
+    else:
+        for series in event_series:
+            logger.info(f"series id: {series.id}, slug: {series.slug}")
+            series_request = SeriesGetRequest.build(id=series.id)
+            series_response = await gamma_api.get_series_by_id(series_request)
+            logger.info(f"series id: {series_response.id}, slug: {series_response.slug}")
+            series_events = series_response.events if series_response.events is not None else []
+            logger.info(f"series events num : {len(series_events)}")
+            new_events = [e for e in series_events if e.ended is False]
+            logger.info(f"new_events : {len(new_events)}")
+            for event in new_events:
+                logger.info(
+                    f"event id: {event.id}, slug: {event.slug},active:{event.active},closed:{event.closed},new:{event.new},archived:{event.archived}")
