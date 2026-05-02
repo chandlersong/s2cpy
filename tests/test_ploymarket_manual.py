@@ -3,7 +3,7 @@ from loguru import logger
 
 from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.infrastructure.settings import get_global_config, setup_gobal_logging
-from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest
+from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 
 
 @pytest.mark.manual
@@ -49,6 +49,11 @@ async def test_event_slug_to_series_id():
     event_slug = "btc-updown-15m-1777468500"
     event_slug_request = EventGetBySlugRequest.build(slug=event_slug)
     event = await gamma_api.get_event_by_slug(event_slug_request)
+    markets = event.markets
+    if markets is not None:
+        for market in markets:
+            logger.info(f"market id: {market.id}, slug: {market.slug},market token id:{market.clobTokenIds}")
+
     event_series = event.series
     if event_series is None:
         logger.info(f"{event_slug_request.slug} has no series")
@@ -65,5 +70,12 @@ async def test_event_slug_to_series_id():
             # logger.info(f"new_events : {len(series_events)}")
             latest_event = series_events[0]
             logger.info(f"latest_event slug is {latest_event.slug},start_time: {latest_event.startTime}")
+            latest_market = latest_event.markets
+            logger.info(f"lastest market from series is {latest_market}")
 
-
+            event_id_request = EventGetByIdRequest.build(id=latest_event.id)
+            event_id_response = await gamma_api.get_event_by_id(event_id_request)
+            market_id_from_research = event_id_response.markets
+            logger.info(
+                f"latest_event slug is {market_id_from_research[0].slug},start_time: {market_id_from_research[0].clobTokenIds}")
+            logger.info(f"market  num {len(market_id_from_research)}")

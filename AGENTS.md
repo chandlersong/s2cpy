@@ -12,12 +12,18 @@
 - `src/s2cpy/infrastructure`
   - `settings.py`：全局配置加载器与单例。它会从 `config/` 目录按优先级合并多个 TOML 配置文件（例如 `config.toml`、`config.<ENV>.toml`、`secrets.toml`），并支持由环境变量 `CONFIG_PATH` 覆盖。使用 `get_global_config()` 获取进程级配置实例；在测试中可用 `reset_global_config()` 重新初始化。
   - `http_client.py`：基于 `aiohttp.ClientSession` 的懒加载单例封装。通过 `await HttpClient.get_session()` 获取可复用会话；长期运行或测试结束时调用 `await HttpClient.close()` 清理。
+
+    - 另注：`settings.load_config()` 还支持通过环境变量 `LOG_FOLDER` 指定配置/日志的基目录（可用于替换 repo 内的 `config/` 目录），以及通过 `ENV` 选择 `config.<ENV>.toml` 文件（测试在 `pyproject.toml` 中将 `ENV=untest`）。
 - `src/s2cpy/model/polymarket_io.py`
   - 包含对 `/public-search` 的请求（`PublicSearchRequest`）和响应（`PublicSearchResponse`）的 Pydantic v2 模型，以及 Market、Event、Series 等大量嵌套域模型。模型常用 `model_dump`、`model_validate`、`Field`、`field_validator` 等模式。
   - 提供 `PublicSearchRequest.build(...)` 工厂方法，用于在 IDE 中避免 Pydantic 可选字段导致的误报（tests/示例广泛使用）。
+
+  - 另外：该模块现在也包含用于单资源 GET 的请求模型（`SeriesGetRequest`, `EventGetBySlugRequest`, `EventGetByIdRequest`, `MarketGetBySlugRequest`, `MarketGetByIdRequest`）以及对应的解析助手（`parse_series_response`, `parse_event_response`, `parse_market_response`），供 `GammaAPI` 的资源获取方法复用。
 - `src/s2cpy/exchange/polymarket_api.py`
   - `GammaAPI`：一个小型异步客户端，使用 `HttpClient.get_session()` 发起请求并用 Pydantic 模型解析响应（调用示例见 tests）。
-  - 内置简单重试（`tenacity.wait_random`），响应解析使用 `PublicSearchResponse.parse_raw` 或模型提供的辅助方法。
+  - 提供的对外方法除了 `public_search` 外，还包含通用的 `get_and_parse(...)` 帮助器以及具体的资源获取方法：`get_series_by_id`, `get_event_by_slug`, `get_market_by_slug`, `get_market_by_id`, `get_event_by_id`。
+  - ��常行为：新增了客户端异常类 `PolymarketAPIError`（基类）、`PolymarketNotFoundError`（HTTP 404）和 `PolymarketServerError`（HTTP 5xx），这些在 `GammaAPI.get_and_parse` 中按 HTTP status 抛出以便上层处理。
+  - 重试与解析细节：`public_search` 使用 `tenacity.retry`（当前实现为最多 5 次尝试，wait_random 在 ~100-200ms 范围内）。响应解析优先使用 `PublicSearchResponse.from_api_response`（该方法兼容数组/`data` 包裹的返回），单资源方法复用 `polymarket_io` 中的 `parse_*_response` 系列解析器。
 
 重要的开发者工作流（命令与环境）
 - 运行单元测试（推荐）:
