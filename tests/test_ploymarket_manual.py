@@ -59,9 +59,11 @@ async def test_event_slug_to_series_id():
             series_response = await gamma_api.get_series_by_id(series_request)
             logger.info(f"series id: {series_response.id}, slug: {series_response.slug}")
             series_events = series_response.events if series_response.events is not None else []
+            series_events = [event for event in series_events if event.active is True and event.closed is False]
+            series_events = sorted(series_events, key=lambda e: e.startTime)
             logger.info(f"series events num : {len(series_events)}")
-            new_events = [e for e in series_events if e.ended is False]
-            logger.info(f"new_events : {len(new_events)}")
-            for event in new_events:
-                logger.info(
-                    f"event id: {event.id}, slug: {event.slug},active:{event.active},closed:{event.closed},new:{event.new},archived:{event.archived}")
+            # logger.info(f"new_events : {len(series_events)}")
+            latest_event = series_events[0]
+            logger.info(f"latest_event slug is {latest_event.slug},start_time: {latest_event.startTime}")
+
+
