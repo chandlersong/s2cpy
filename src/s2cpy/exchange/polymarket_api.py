@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-from loguru import logger
 from datetime import timedelta
 from tenacity import retry, wait_random, stop_after_attempt
 
@@ -20,9 +19,6 @@ from s2cpy.infrastructure.http_client import HttpClient
 from s2cpy.model.polymarket_io import (
     PublicSearchRequest,
     PublicSearchResponse,
-    parse_series_response,
-    parse_event_response,
-    parse_market_response,
     Series,
     Event,
     Market,
@@ -60,6 +56,20 @@ class GammaAPI:
 
         async with session.get(url, params=params, timeout=timeout) as resp:
             if resp.status == 200:
+                # If caller passed a Pydantic model class, prefer parsing from
+                # the raw JSON text to avoid an intermediate dict when the
+                # model provides `model_validate_json`.
+                if isinstance(parser, type) and hasattr(parser, "model_validate_json"):
+                    text = await resp.text()
+                    return parser.model_validate_json(text)
+
+                # If parser is a Pydantic model that only supports dict parsing
+                # use resp.json()
+                if isinstance(parser, type) and hasattr(parser, "model_validate"):
+                    data = await resp.json()
+                    return parser.model_validate(data)
+
+                # Fallback: existing behavior for parser functions / callables
                 data = await resp.json()
                 return parser(data)
             elif resp.status == 404:
@@ -69,12 +79,15 @@ class GammaAPI:
             else:
                 raise PolymarketAPIError(f"Unexpected status {resp.status} for {url}")
 
-    @retry(stop=stop_after_attempt(5),wait=wait_random(min=timedelta(milliseconds=100), max=timedelta(milliseconds=200)))
+    @retry(stop=stop_after_attempt(5),
+           wait=wait_random(min=timedelta(milliseconds=100), max=timedelta(milliseconds=200)))
     async def public_search(self, request: PublicSearchRequest, timeout: float = 30) -> PublicSearchResponse:
         url = f"{GammaAPI.BASE_URL}/public-search"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
-        return await self.get_and_parse(url, PublicSearchResponse.from_api_response, params=params, timeout=timeout)
+        # Pass the Pydantic model class directly so get_and_parse can
+        # construct the model (via model_validate_json / model_validate).
+        return await self.get_and_parse(url, PublicSearchResponse, params=params, timeout=timeout)
 
     async def get_series_by_id(self, request: SeriesGetRequest, timeout: float = 30) -> "Series":
         """GET /series/{id} -> Series
@@ -84,35 +97,35 @@ class GammaAPI:
         url = f"{GammaAPI.BASE_URL}/{f"series/{request.id}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
-        return await self.get_and_parse(url, parse_series_response, params=params, timeout=timeout)
+        return await self.get_and_parse(url, Series, params=params, timeout=timeout)
 
     async def get_event_by_slug(self, request: EventGetBySlugRequest, timeout: float = 30) -> Event:
         """GET /events/{slug} -> Event"""
         url = f"{GammaAPI.BASE_URL}/{f"events/slug/{request.slug}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("slug", None)
-        return await self.get_and_parse(url, parse_event_response, params=params, timeout=timeout)
+        return await self.get_and_parse(url, Event, params=params, timeout=timeout)
 
     async def get_market_by_slug(self, request: MarketGetBySlugRequest, timeout: float = 30) -> "Market":
         """GET /markets/{slug} -> Market"""
-        url = f"{GammaAPI.BASE_URL}/{f"markets/{request.slug}".lstrip('/')}"
+        url = f"{GammaAPI.BASE_URL}/{f"markets/slug/{request.slug}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("slug", None)
-        return await self.get_and_parse(url, parse_market_response, params=params, timeout=timeout)
+        return await self.get_and_parse(url, Market, params=params, timeout=timeout)
 
     async def get_market_by_id(self, request: MarketGetByIdRequest, timeout: float = 30) -> "Market":
         """GET /markets/{id} -> Market"""
         url = f"{GammaAPI.BASE_URL}/{f"markets/{request.id}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
-        return await self.get_and_parse(url, parse_market_response, params=params, timeout=timeout)
+        return await self.get_and_parse(url, Market, params=params, timeout=timeout)
 
     async def get_event_by_id(self, request: EventGetByIdRequest, timeout: float = 30) -> "Event":
         """GET /events/{id} -> Event"""
         url = f"{GammaAPI.BASE_URL}/{f"events/{request.id}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
-        return await self.get_and_parse(url, parse_event_response, params=params, timeout=timeout)
+        return await self.get_and_parse(url, Event, params=params, timeout=timeout)
 
 
 # -----------------

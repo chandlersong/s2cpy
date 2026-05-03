@@ -24,7 +24,6 @@ class OrderInfo:
     quantity: float
 
 
-
 @dataclasses.dataclass
 class Data:
     """
@@ -35,11 +34,16 @@ class Data:
     data: Any
 
 
-DataHandler = Callable[[Any], Any]
+DataHandler = Callable[[str, Any], Any]
 
 
 class DataFeed(Protocol):
     """
+    # 关于DataFeed的一些想法
+    1. 只有在调用start的之后，其才能正式开始工作。
+    2. 其要提供一个支持的信息列表，方便strategy订阅
+
+
     设想的是一个数据源。包括但不限于以下一些情况
     1. K线，盘口这些市场信息。
     2. 账户信息，比如账户余额。
@@ -50,6 +54,16 @@ class DataFeed(Protocol):
     data_types: list[str]  # 例如k线，盘口数据
 
     def subscribe(self, handler: DataHandler):
+        pass
+
+    async def start(self):
+        pass
+
+    def supported_data_identify(self) -> list[str]:
+        """
+        提供本dataFeed支持的数据类型
+        :return:
+        """
         pass
 
 

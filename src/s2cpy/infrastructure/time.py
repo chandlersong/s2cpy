@@ -5,6 +5,9 @@ from enum import Enum
 def now_unix_ms_utc() -> int:
     return int(time.time() * 1000)
 
+def get_unix_seconds_utc() -> int:
+    return int(time.time())
+
 
 class TimeInterval(Enum):
     OneMinute = 60
@@ -17,7 +20,7 @@ class TimeInterval(Enum):
     OneMonth = 30 * 24 * 60 * 60
     OneYear = 365 * 24 * 60 * 60
 
-    def to_str(self)->str:
+    def to_str(self) -> str:
         """Return a compact human-readable string for the interval.
 
         Examples:
@@ -76,3 +79,6 @@ class TimeInterval(Enum):
 
     def get_close_now_ms(self) -> int:
         return self.get_close_unix_ms(now_unix_ms_utc())
+
+    def get_close_now_second(self) -> int:
+        return self.get_close_unix_seconds(get_unix_seconds_utc())

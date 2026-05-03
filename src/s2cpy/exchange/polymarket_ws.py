@@ -20,13 +20,16 @@ class PolymarketWS:
     - Uses a background reader loop + heartbeat loop. Handlers are scheduled
       as tasks so they don't block the reader.
     - Reconnects with exponential backoff (tenacity).
+
+    [refer to](https://docs.polymarket.com/market-data/websocket/overview)
+
     """
 
     def __init__(
             self,
             url: str,
             session: Optional[aiohttp.ClientSession] = None,
-            heartbeat_interval: float = 25.0,
+            heartbeat_interval: float = 9.5, #要求是10s，9.5s保险
             reconnect_attempts: Optional[int] = 5,
     ):
         self.url = url

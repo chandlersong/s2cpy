@@ -204,7 +204,43 @@ class Market(BaseModel):
     volume1yr: Optional[float] = None
     gameStartTime: Optional[str] = None
     secondsDelay: Optional[int] = None
-    clobTokenIds: Optional[str] = None
+    clobTokenIds: Optional[List[str]] = None
+
+    @field_validator("clobTokenIds", mode="before")
+    @classmethod
+    def _validate_clob_token_ids(cls, v):
+        """Normalize clobTokenIds to a list of strings.
+
+        Keep it simple: handle string -> List[str] conversion only.
+        - If already a list, ensure all elements are strings.
+        - If a string, try json.loads; if that yields a list, use it.
+        - Otherwise, split on commas if present, or return single-element list.
+        """
+        import json
+
+        if isinstance(v, list):
+            return [str(x) for x in v]
+
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            # Try parsing JSON array
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except Exception:
+                pass
+
+            # Fallback: comma-separated or single token
+            if "," in s:
+                return [p.strip() for p in s.split(",") if p.strip()]
+
+            return [s]
+
+        return v
+
     disqusThread: Optional[str] = None
     shortOutcomes: Optional[str] = None
     teamAID: Optional[str] = None
@@ -651,12 +687,12 @@ class EventGetByIdRequest(BaseModel):
 class MarketGetBySlugRequest(BaseModel):
     slug: str
     optimized: Optional[bool] = None
-    include_event: Optional[bool] = None
+    include_tag: Optional[bool] = None
 
     @classmethod
     def build(cls, slug: str, optimized: Optional[bool] = None,
-              include_event: Optional[bool] = None) -> "MarketGetBySlugRequest":
-        return cls(slug=slug, optimized=optimized, include_event=include_event)
+              include_tag: Optional[bool] = None) -> "MarketGetBySlugRequest":
+        return cls(slug=slug, optimized=optimized, include_tag=include_tag)
 
 
 class MarketGetByIdRequest(BaseModel):
