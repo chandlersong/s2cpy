@@ -1,0 +1,92 @@
+"""
+主要是用来定义一些核心的功能类。方便后续的改变。
+"""
+import dataclasses
+from typing import Protocol, Optional, Callable, Any, Dict
+
+from aiohttp.payload import Order
+
+"""
+用户发出一些
+"""
+
+
+@dataclasses.dataclass
+class Asset:
+    id: str
+    external_id: str
+    validate_before: Optional[int] = None  # None代表永久有效，UTC的unix timestamp。精确到毫秒
+
+
+@dataclasses.dataclass
+class OrderInfo:
+    asset: Asset
+    quantity: float
+
+
+
+@dataclasses.dataclass
+class Data:
+    """
+    表示具体的数据
+    """
+    asset: Asset
+    asset_type: str
+    data: Any
+
+
+DataHandler = Callable[[Any], Any]
+
+
+class DataFeed(Protocol):
+    """
+    设想的是一个数据源。包括但不限于以下一些情况
+    1. K线，盘口这些市场信息。
+    2. 账户信息，比如账户余额。
+    3. 一些计算过的因子。比如说MA，截面因子等
+    """
+    subscribe_id: str  # 必须有的字符串属性
+    assert_ids: list[str]
+    data_types: list[str]  # 例如k线，盘口数据
+
+    def subscribe(self, handler: DataHandler):
+        pass
+
+
+class OrderEngine(Protocol):
+
+    def execute_immediately(self, order: OrderInfo):
+        pass
+
+
+class Strategy(Protocol):
+
+    def register_data_list(self) -> Dict[str, str]:
+        """
+        定义需要哪些数据，返回一个dict，分别为assert_id和data_type
+        :return:
+        """
+        pass
+
+    def on_change(self, data: Data):
+        """
+        当外部数据任何变化时，被调用
+        :param data:
+        :return:
+        """
+        pass
+
+    def on_history_change(self, data: Data):
+        pass
+
+
+class Engine(Protocol):
+
+    def register_data_hub(self, data_feed: DataFeed):
+        pass
+
+    def register_strategy(self, strategy: Strategy):
+        pass
+
+    def start(self):
+        pass
