@@ -1,6 +1,7 @@
 """
 主要是用来定义一些核心的功能类。方便后续的改变。
 """
+import abc
 import dataclasses
 from typing import Protocol, Optional, Callable, Any, Dict
 
@@ -49,19 +50,27 @@ class DataFeed(Protocol):
     2. 账户信息，比如账户余额。
     3. 一些计算过的因子。比如说MA，截面因子等
     """
-    subscribe_id: str  # 必须有的字符串属性
-    assert_ids: list[str]
-    data_types: list[str]  # 例如k线，盘口数据
 
+    @abc.abstractmethod
     def subscribe(self, handler: DataHandler):
         pass
 
+    @abc.abstractmethod
     async def start(self):
         pass
 
+    @abc.abstractmethod
     def supported_data_identify(self) -> list[str]:
         """
         提供本dataFeed支持的数据类型
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_name(self) -> str:
+        """
+        提供dataFeed的名字，方便后续的管理
         :return:
         """
         pass
@@ -96,11 +105,14 @@ class Strategy(Protocol):
 
 class Engine(Protocol):
 
-    def register_data_hub(self, data_feed: DataFeed):
+    @abc.abstractmethod
+    async def register_data_feed(self, data_feed: DataFeed):
         pass
 
-    def register_strategy(self, strategy: Strategy):
+    @abc.abstractmethod
+    async def register_strategy(self, strategy: Strategy):
         pass
 
-    def start(self):
+    @abc.abstractmethod
+    async def start(self):
         pass

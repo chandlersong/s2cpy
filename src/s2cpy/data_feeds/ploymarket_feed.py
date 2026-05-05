@@ -2,7 +2,6 @@ import asyncio
 from types import CoroutineType
 from typing import Any, Dict
 
-
 from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc
@@ -15,6 +14,9 @@ class CryptoRepeatDataFeed(DataFeed):
     """
     主要是代表那些BTC，一段时间内猜涨跌的数据连接
     """
+
+    def get_name(self) -> str:
+        return self.domain_key
 
     def supported_data_identify(self) -> list[str]:
         key = self.domain_key

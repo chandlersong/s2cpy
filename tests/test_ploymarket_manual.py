@@ -1,7 +1,12 @@
+import asyncio
+
 import pytest
 from loguru import logger
 
+from s2cpy.core.engine import SingleNodeLivingTradingEngine
+from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.exchange.polymarket_api import GammaAPI
+from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.settings import get_global_config, setup_gobal_logging
 from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 
@@ -79,3 +84,57 @@ async def test_event_slug_to_series_id():
             logger.info(
                 f"latest_event slug is {market_id_from_research[0].slug},start_time: {market_id_from_research[0].clobTokenIds}")
             logger.info(f"market  num {len(market_id_from_research)}")
+
+
+@pytest.mark.manual
+async def test_crypto_repeat_data_start_listen() -> None:
+    repeat_data_feed = CryptoRepeatDataFeed()
+    printer_handler = lambda data_name, content: logger.info(f"receive:{data_name}: {content}")
+    repeat_data_feed.subscribe(printer_handler)
+    await repeat_data_feed.start()
+    await asyncio.sleep(60)
+
+
+@pytest.mark.manual
+async def test_single_node_living_trading_engine() -> None:
+    """
+    应该是一个最简单的实盘启动
+    :return:
+    """
+
+@pytest.mark.manual
+async def test_ws_echo_manual():
+    """Manual test: connect to a public echo server and verify send/receive.
+
+    Note: marked manual because it uses real network and an external server.
+    """
+    url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"  # public echo service (manual only)
+    ws = PolymarketWS(url, reconnect_attempts=2)
+
+    received = asyncio.Queue()
+
+    async def on_msg(msg):
+        await received.put(msg)
+
+    ws.register_handler("default", on_msg)
+
+    await ws.connect()
+    logger.info(f"WS connected to {url}")
+    sub = {
+        "assets_ids": [
+            "26871611942842159660578538115087561842096772208823332594549095712451566897786"
+        ],
+        "type": "market",
+        "initial_dump": False,
+        "level": 2,
+        "custom_feature_enabled": True
+    }
+    await ws.send(sub)
+
+    # wait for a message from the server (timeout to avoid hanging)
+    try:
+        msg = await asyncio.wait_for(received.get(), timeout=10)
+        logger.info(f"msg: {msg}")
+        assert isinstance(msg, dict)
+    finally:
+        await ws.close()
