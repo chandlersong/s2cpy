@@ -114,7 +114,7 @@ def reset_global_config() -> None:
     _global_settings = None
 
 
-def setup_gobal_logging(log_config: LogSetting):
+def setup_global_logging(log_config: LogSetting):
     """根据配置初始化 Loguru（项目启动时调用一次）"""
 
     # 先移除默认的处理器（避免重复输出）

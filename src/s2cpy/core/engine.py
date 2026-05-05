@@ -47,14 +47,25 @@ class SingleNodeLivingTradingEngine(Engine):
         self._status = self.STATUS_READY
 
     async def register_strategy(self, strategy: Strategy):
-        pass
+        self._strategies[strategy.get_name()] = strategy
+        data_list = strategy.data_list()
+
+        logger.info(f"注册策略: {strategy.get_name()}")
+        for topic in data_list:
+            signal = self._signals.get(topic)
+            if signal:
+                signal.connect(strategy.on_change)
+                logger.info(f"策略: {strategy.get_name()} 订阅了数据: {topic}")
+            else:
+                logger.warning(f"没有找到数据: {topic} 的信号，策略: {strategy.get_name()} 无法订阅")
+
+
 
     async def start(self):
         logger.info(f"开始运行交易的engine")
         for data_feed in self._data_feeds.values():
             logger.info(f"data feed: {data_feed.get_name()} 启动")
             await data_feed.start()
-        pass
 
     async def register_data_feed(self, data_feed: DataFeed):
         self._data_feeds[data_feed.get_name()] = data_feed

@@ -7,7 +7,7 @@ from s2cpy.core.engine import SingleNodeLivingTradingEngine
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
-from s2cpy.infrastructure.settings import get_global_config, setup_gobal_logging
+from s2cpy.infrastructure.settings import get_global_config, setup_global_logging
 from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 
 
@@ -21,7 +21,7 @@ async def test_public_search_api():
     logger.debug(f"test_manual_case")
     # 初始化全局配置并启用日志（避免未使用导入的警告）
     cfg = get_global_config()
-    setup_gobal_logging(cfg.log)
+    setup_global_logging(cfg.log)
 
     # 使用 build() 工厂方法以避免 IDE 将 pydantic __init__ 误判为需要填写全部字段
     params = PublicSearchRequest.build(q="btc")

@@ -15,6 +15,11 @@ class CryptoRepeatDataFeed(DataFeed):
     主要是代表那些BTC，一段时间内猜涨跌的数据连接
     """
 
+    def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
+        self._coin_name = coin_name
+        self._interval = interval
+        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(AttributeError("handler没有设置"))
+
     def get_name(self) -> str:
         return self.domain_key
 
@@ -68,11 +73,6 @@ class CryptoRepeatDataFeed(DataFeed):
 
     def subscribe(self, handler: DataHandler):
         self._handler = handler
-
-    def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
-        self._coin_name = coin_name
-        self._interval = interval
-        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(AttributeError("handler没有设置"))
 
     @property
     def current_slug(self):

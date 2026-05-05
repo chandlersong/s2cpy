@@ -3,7 +3,7 @@
 """
 import abc
 import dataclasses
-from typing import Protocol, Optional, Callable, Any, Dict
+from typing import Protocol, Optional, Callable, Any, Dict, List
 
 from aiohttp.payload import Order
 
@@ -83,8 +83,8 @@ class OrderEngine(Protocol):
 
 
 class Strategy(Protocol):
-
-    def register_data_list(self) -> Dict[str, str]:
+    @abc.abstractmethod
+    def data_list(self) -> List[str]:
         """
         定义需要哪些数据，返回一个dict，分别为assert_id和data_type
         :return:
@@ -100,6 +100,10 @@ class Strategy(Protocol):
         pass
 
     def on_history_change(self, data: Data):
+        pass
+
+    @abc.abstractmethod
+    def get_name(self):
         pass
 
 
