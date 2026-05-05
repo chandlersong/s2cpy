@@ -12,4 +12,5 @@ async def test_crypto_repeat_data_start_listen() -> None:
     printer_handler = lambda data_name, content: logger.info(f"receive:{data_name}: {content}")
     repeat_data_feed.subscribe(printer_handler)
     await repeat_data_feed.start()
-    await asyncio.sleep(30)
+    await asyncio.sleep(60)
+    logger.info(repeat_data_feed.temp)
