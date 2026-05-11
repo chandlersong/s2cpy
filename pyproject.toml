@@ -11,6 +11,7 @@ dependencies = [
     "aiohttp>=3.13.5",
     "blinker>=1.9.0",
     "loguru>=0.7.3",
+    "py-clob-client-v2>=1.0.0",
     "pydantic>=2.13.3",
     "pydantic-settings>=2.14.0",
     "tenacity>=9.1.4",

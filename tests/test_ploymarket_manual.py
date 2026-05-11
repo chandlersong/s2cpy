@@ -1,5 +1,10 @@
 import asyncio
+import os
 
+from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
+
+os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
+os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
 import pytest
 from loguru import logger
 
@@ -7,7 +12,7 @@ from s2cpy.core.engine import SingleNodeLivingTradingEngine
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
-from s2cpy.infrastructure.settings import get_global_config, setup_global_logging
+from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
 from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 
 
@@ -96,11 +101,16 @@ async def test_crypto_repeat_data_start_listen() -> None:
 
 
 @pytest.mark.manual
-async def test_single_node_living_trading_engine() -> None:
+async def test_market_make_account() -> None:
     """
     应该是一个最简单的实盘启动
     :return:
     """
+
+    logger.debug(f"test_market_make_account")
+    config = get_global_config()
+    setup_global_logging(config.log)
+    account = PolyMarketMarketMakerAccount(config.get_default_account())
 
 @pytest.mark.manual
 async def test_ws_echo_manual():

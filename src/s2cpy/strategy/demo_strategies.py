@@ -1,11 +1,14 @@
 from typing import Dict, List
 
 from s2cpy.infrastructure.time import TimeInterval
-from s2cpy.model.core_model import Strategy, Data
+from s2cpy.model.core_model import Strategy, Data, Account
 from loguru import logger
 
 
 class PolyMarketRepeatDemoStrategy(Strategy):
+
+    def register_account(self, account_names: List[Account]):
+        pass
 
     def data_list(self) -> List[str]:
         key = self.domain_key

@@ -1,7 +1,7 @@
-from typing import Optional
+from typing import Optional, Dict, Any, Union, Annotated, Literal
 import os
 import tomllib
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from loguru import logger
 import sys
@@ -18,6 +18,29 @@ class LogSetting(BaseModel):
     log_serialize: bool = False  # True=输出JSON格式（生产环境推荐）
 
 
+class AccountBase(BaseModel):
+    """基础账户模型，所有具体账户类型应继承自此类。
+
+    设计目的：为不同类型的账户（API key / OAuth 等）提供共同字段。
+    扩展点：可继承并添加特定类型的字段（例如 websocket token、ssh key 等）。
+    业务规范：所有子类必须包含一个 `type` 字段用于区分具体子类型。
+    """
+    type: str
+    name: Optional[str] = None
+    enabled: bool = True
+
+
+class PolyMarketRelayerAccount(AccountBase):
+    type: Literal["polymarket_relayer_account"] = "polymarket_relayer_account"
+    private_key: str = None
+    funder_address: str = None
+    deposit_wallet: str = None
+
+
+# 兼容命名：保留原来的占位符名（如果外部引用了 AccountSettings ）
+AccountSettings = AccountBase
+
+
 # ====================== 主配置类 ======================
 class AppSettings(BaseSettings):
     instance_name: str = "测试项目"
@@ -31,6 +54,11 @@ class AppSettings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    # 多账户支持（使用 pydantic 的 discriminated union 以区分不同类型账户）
+    accounts: Dict[str, Annotated[Union[PolyMarketRelayerAccount], Field(discriminator="type")]] = {}
+    # 指定默认的账户名称（可通过环境变量 ACCOUNT_DEFAULT 或 ACCOUNTS__<name>__ 覆盖）
+    default_account: Optional[str] = None
 
     # ====================== 自定义加载多个 TOML 文件 ======================
     @classmethod
@@ -80,6 +108,45 @@ class AppSettings(BaseSettings):
         res = cls(**merged_config)
         res.environment = running_env
         return res
+
+    @model_validator(mode="after")
+    def _validate_default_account(self) -> "AppSettings":
+        """校验 default_account 是否存在于 accounts 中（若设置）。
+
+        规则：
+        - 如果 `default_account` 不为空，但不在 `accounts` 中 -> 抛出 ValueError。
+        """
+        if self.default_account:
+            if self.default_account not in (self.accounts or {}):
+                raise ValueError(f"default_account '{self.default_account}' not found in accounts")
+        return self
+
+    def get_account(self, name: Optional[str] = None) -> Union[PolyMarketRelayerAccount]:
+        """获取命名账户；如果 name 为 None，则走默认选择逻辑（见 get_default_account）。"""
+        if name is None:
+            return self.get_default_account()
+        try:
+            return self.accounts[name]
+        except KeyError:
+            raise KeyError(f"Account '{name}' not found")
+
+    def get_default_account(self) -> Union[PolyMarketRelayerAccount]:
+        """默认账户选择策略：
+
+        - 若 `default_account` 已设置且存在，则返回对应账户。
+        - 若未设置但仅有一个账户配置，则返回唯一账户。
+        - 否则抛出 ValueError（需调用者明确指定要使用的账户）。
+        """
+        if self.default_account:
+            return self.accounts[self.default_account]
+
+        if not self.accounts:
+            raise ValueError("No accounts configured")
+
+        if len(self.accounts) == 1:
+            return next(iter(self.accounts.values()))
+
+        raise ValueError("Multiple accounts present but no default_account set")
 
     @classmethod
     def get_instance(cls) -> "AppSettings":

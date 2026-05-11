@@ -13,9 +13,15 @@
 from __future__ import annotations
 
 from datetime import timedelta
+
+from loguru import logger
+from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
+from py_clob_client_v2.constants import POLYGON
 from tenacity import retry, wait_random, stop_after_attempt
 
 from s2cpy.infrastructure.http_client import HttpClient
+from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
+from s2cpy.model.core_model import Account
 from s2cpy.model.polymarket_io import (
     PublicSearchRequest,
     PublicSearchResponse,
@@ -126,6 +132,7 @@ class GammaAPI:
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
         return await self.get_and_parse(url, Event, params=params, timeout=timeout)
+
 
 
 # -----------------
