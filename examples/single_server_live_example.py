@@ -18,7 +18,10 @@ async def main():
     """
     config = get_global_config()
     setup_global_logging(config.log)
-    engine = SingleNodeLivingTradingEngine()
+
+    account_list = config.accounts
+
+    engine = SingleNodeLivingTradingEngine([])
     repeat_data_feed = CryptoRepeatDataFeed()
     await engine.register_data_feed(repeat_data_feed)
     demo_strategy = PolyMarketRepeatDemoStrategy()

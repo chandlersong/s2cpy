@@ -1,12 +1,48 @@
 import time
+import calendar
 from enum import Enum
+from datetime import date, datetime, time as dt_time, timezone
 
 
 def now_unix_ms_utc() -> int:
     return int(time.time() * 1000)
 
+
 def get_unix_seconds_utc() -> int:
     return int(time.time())
+
+
+def str_date_to_unix_seconds(str_date: str) -> int:
+    """
+    :param str_date: formate是 YYYY-MM-DD
+    :return: unix timestamp，utc时区，然后精确到s
+    """
+    # 解释：原实现使用 time.mktime => 按本地时区将 struct_time 转换为 epoch，
+    # 这会导致结果依赖运行环境的时区。这里改为把日期视为 UTC 的当天 00:00:00，
+    # 并返回对应的 UTC unix seconds，保证跨时区一致性。
+    d = date.fromisoformat(str_date)
+    dt = datetime.combine(d, dt_time(0, 0, 0), tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
+def str_iso_datetime_to_unix_seconds(str_dt: str) -> int:
+    """Parse an ISO-8601 datetime string like '2026-05-13T12:45:00Z' using strptime
+    and return UTC unix seconds.
+
+    This implementation uses time.strptime to parse the string with a '%Y-%m-%dT%H:%M:%SZ'
+    format and then calendar.timegm to convert the resulting struct_time to seconds since
+    the epoch treating the struct_time as UTC. It intentionally only supports the 'Z'
+    (UTC) suffix; other ISO offsets (e.g. '+00:00' or '-04:00') are not handled by this
+    helper.
+    """
+    # expect a trailing Z for UTC
+    if not str_dt.endswith("Z"):
+        raise ValueError("Only 'Z' (UTC) timezone is supported by this parser")
+
+    # parse using time.strptime which returns a struct_time
+    tm = time.strptime(str_dt, "%Y-%m-%dT%H:%M:%SZ")
+    # calendar.timegm treats the tuple as UTC and returns epoch seconds
+    return calendar.timegm(tm)
 
 
 class TimeInterval(Enum):

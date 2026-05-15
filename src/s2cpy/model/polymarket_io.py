@@ -147,7 +147,7 @@ class Market(BaseModel):
     slug: Optional[str] = None
     twitterCardImage: Optional[str] = None
     resolutionSource: Optional[str] = None
-    endDate: Optional[datetime] = None
+    endDate: Optional[str] = None
     category: Optional[str] = None
     ammType: Optional[str] = None
     liquidity: Optional[str] = None
@@ -175,8 +175,8 @@ class Market(BaseModel):
     marketMakerAddress: Optional[str] = None
     createdBy: Optional[int] = None
     updatedBy: Optional[int] = None
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
     closedTime: Optional[str] = None
     wideFormat: Optional[bool] = None
     new: Optional[bool] = None
@@ -518,6 +518,108 @@ class Pagination(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Positions (data-api) 模型
+# ---------------------------------------------------------------------------
+
+
+class TokenPosition(BaseModel):
+    """单个仓位/持仓条目。
+
+    该模型尽量声明常见字段，同时允许额外字段以保证向后兼容未知响应字段。
+    """
+    # Keep model_config permissive to avoid hard failures on unexpected fields,
+    # but only declare fields observed in the MCP /positions sample you provided.
+    model_config = ConfigDict(extra="allow")
+
+    # Fields observed in MCP /positions sample
+    proxyWallet: Optional[str] = None
+    asset: Optional[str] = None
+    conditionId: Optional[str] = None
+    size: Optional[float] = None
+    avgPrice: Optional[float] = None
+    initialValue: Optional[float] = None
+    currentValue: Optional[float] = None
+    cashPnl: Optional[float] = None
+    percentPnl: Optional[float] = None
+    totalBought: Optional[float] = None
+    realizedPnl: Optional[float] = None
+    percentRealizedPnl: Optional[float] = None
+    curPrice: Optional[float] = None
+    redeemable: Optional[bool] = None
+    mergeable: Optional[bool] = None
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    icon: Optional[str] = None
+    eventId: Optional[str] = None
+    eventSlug: Optional[str] = None
+    outcome: Optional[str] = None
+    outcomeIndex: Optional[int] = None
+    oppositeOutcome: Optional[str] = None
+    oppositeAsset: Optional[str] = None
+    endDate: Optional[str] = None
+    negativeRisk: Optional[bool] = None
+
+
+class PositionsResponse(BaseModel):
+    """/positions 端点的响应封装。
+
+    兼容以下几种常见返回格式：
+    - 直接数组： [ {...}, ... ]
+    - 包裹 data 字段： {"data": [ ... ]}
+    - 命名字段： {"positions": [...], "pagination": {...}}
+    """
+    positions: Optional[List[TokenPosition]] = None
+
+    @classmethod
+    def from_api_response(cls, data: Any) -> "PositionsResponse":
+        # If the API returns a raw list, treat it as positions list
+        if isinstance(data, list):
+            return cls(positions=[TokenPosition.model_validate(item) for item in data])
+
+        # If dict, try multiple common shapes used by APIs:
+        if isinstance(data, dict):
+            # 1) Directly contains positions / pagination
+            if "positions" in data or "pagination" in data:
+                return cls.model_validate(data)
+
+            # 2) Common field names that may contain the list
+            for key in ("data", "results", "items", "positions", "rows"):
+                maybe = data.get(key)
+                if isinstance(maybe, list):
+                    return cls(positions=[TokenPosition.model_validate(item) for item in maybe])
+
+                # Nested wrapper: {data: {results: [...]}}
+                if isinstance(maybe, dict):
+                    for inner_key in ("results", "items", "positions", "rows"):
+                        inner = maybe.get(inner_key)
+                        if isinstance(inner, list):
+                            return cls(positions=[TokenPosition.model_validate(item) for item in inner])
+
+            # 3) Pagination info sometimes under `meta` or `pagination` with list in `data`/`results`
+            for meta_container in ("meta", "pagination", "page", "paging"):
+                mc = data.get(meta_container)
+                if isinstance(mc, dict):
+                    for key in ("results", "items", "positions", "rows", "data"):
+                        inner = mc.get(key)
+                        if isinstance(inner, list):
+                            return cls(positions=[TokenPosition.model_validate(item) for item in inner],
+                                       pagination=Pagination.model_validate({
+                                           "hasMore": bool(data.get("hasMore") or mc.get("hasMore") or mc.get("has_more") ),
+                                           "totalResults": int(data.get("totalResults") or mc.get("total") or mc.get("totalResults") or mc.get("count") or 0)
+                                       }))
+
+        raise TypeError("Unsupported /positions response format")
+
+
+def parse_positions_response(data: Any) -> PositionsResponse:
+    """Helper: parse /positions response into PositionsResponse.
+
+    保持与其他 parse_*_response 助手一致的行为：接受 dict 或包含 data 包装的形式。
+    """
+    return PositionsResponse.from_api_response(data)
+
+
+# ---------------------------------------------------------------------------
 # 请求参数模型
 # ---------------------------------------------------------------------------
 
@@ -691,24 +793,21 @@ class EventGetByIdRequest(BaseModel):
 
 class MarketGetBySlugRequest(BaseModel):
     slug: str
-    optimized: Optional[bool] = None
     include_tag: Optional[bool] = None
 
     @classmethod
     def build(cls, slug: str, optimized: Optional[bool] = None,
               include_tag: Optional[bool] = None) -> "MarketGetBySlugRequest":
-        return cls(slug=slug, optimized=optimized, include_tag=include_tag)
+        return cls(slug=slug,include_tag=include_tag)
 
 
 class MarketGetByIdRequest(BaseModel):
     id: str
-    optimized: Optional[bool] = None
-    include_event: Optional[bool] = None
+    include_tag: Optional[bool] = None
 
     @classmethod
-    def build(cls, id: str, optimized: Optional[bool] = None,
-              include_event: Optional[bool] = None) -> "MarketGetByIdRequest":
-        return cls(id=id, optimized=optimized, include_event=include_event)
+    def build(cls, id: str, include_tag: Optional[bool] = None) -> "MarketGetByIdRequest":
+        return cls(id=id, include_tag=include_tag)
 
 
 # ---------------------------------------------------------------------------

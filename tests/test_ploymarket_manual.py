@@ -1,14 +1,12 @@
 import asyncio
 import os
-
-from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
-
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
+
+from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
 import pytest
 from loguru import logger
 
-from s2cpy.core.engine import SingleNodeLivingTradingEngine
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
@@ -111,6 +109,13 @@ async def test_market_make_account() -> None:
     config = get_global_config()
     setup_global_logging(config.log)
     account = PolyMarketMarketMakerAccount(config.get_default_account())
+    await account.sync_account_position()
+    asset_dict = account.asset_dict
+    logger.info(f"账户有{len(asset_dict)}类资产")
+    for asset, position in asset_dict.items():
+        logger.info(f"asset: {asset}, position: {position}")
+    await asyncio.sleep(5)
+
 
 @pytest.mark.manual
 async def test_ws_echo_manual():

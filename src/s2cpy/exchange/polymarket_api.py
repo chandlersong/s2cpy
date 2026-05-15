@@ -13,15 +13,9 @@
 from __future__ import annotations
 
 from datetime import timedelta
-
-from loguru import logger
-from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
-from py_clob_client_v2.constants import POLYGON
 from tenacity import retry, wait_random, stop_after_attempt
 
 from s2cpy.infrastructure.http_client import HttpClient
-from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
-from s2cpy.model.core_model import Account
 from s2cpy.model.polymarket_io import (
     PublicSearchRequest,
     PublicSearchResponse,
@@ -33,11 +27,14 @@ from s2cpy.model.polymarket_io import (
     EventGetByIdRequest,
     MarketGetBySlugRequest,
     MarketGetByIdRequest,
+    PositionsResponse,
+    parse_positions_response,
 )
 
 
 class GammaAPI:
     BASE_URL = "https://gamma-api.polymarket.com"
+    DATA_URL = "https://data-api.polymarket.com"
 
     def __init__(self):
         """初始化 GammaAPI 客户端。
@@ -133,6 +130,20 @@ class GammaAPI:
         params.pop("id", None)
         return await self.get_and_parse(url, Event, params=params, timeout=timeout)
 
+    async def positions(self, user: str | None = None, size_threshold: int | None = 1,
+                        limit: int | None = 100, offset: int | None = None,
+                        timeout: float = 30) -> PositionsResponse:
+        """GET https://data-api.polymarket.com/positions
+
+        Only exposes the following query parameters to callers: `user`, `sizeThreshold`, `limit`, `offset`.
+        Returns a `PositionsResponse` parsed from the response. Raises existing Polymarket* errors on non-200.
+        """
+        url = f"{self.DATA_URL}/positions"
+        params = {"user": user, "sizeThreshold": size_threshold, "limit": limit, "offset": offset}
+        # remove None values
+        params = {k: v for k, v in params.items() if v is not None}
+        # Use parse_positions_response helper so we can accept array or wrapped formats
+        return await self.get_and_parse(url, parse_positions_response, params=params, timeout=timeout)
 
 
 # -----------------

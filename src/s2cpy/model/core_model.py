@@ -13,14 +13,34 @@ from typing import Protocol, Optional, Callable, Any, List
 
 
 @dataclasses.dataclass
+class Position:
+    price: float
+    quantity: float
+
+
+@dataclasses.dataclass(eq=False)
 class Asset:
     """
     FUTURE：
     1. 加入一些其他信息，比如最ticker size这类
+    2. 加入一些字段，方便实盘的统计
     """
     id: str
     external_id: Optional[str] = None
     validate_before: Optional[int] = None  # None代表永久有效，UTC的unix timestamp。精确到毫秒
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Asset):
+            return NotImplemented
+        # Assets are considered equal if their id is equal. Other metadata
+        # (external_id, validate_before) is not part of identity used for
+        # hashing/keying.
+        return self.id == other.id
+
+    def __hash__(self) -> int:
+        # Use the unique id string as the basis for the hash so Asset can be
+        # safely used as a dict key or in sets.
+        return hash(self.id)
 
 
 @dataclasses.dataclass
