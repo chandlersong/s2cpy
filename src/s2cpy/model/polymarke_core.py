@@ -1,4 +1,5 @@
 import collections
+import dataclasses
 
 from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
 from py_clob_client_v2.constants import POLYGON
@@ -22,22 +23,42 @@ _CLOB_HOST = "https://clob.polymarket.com"
 # 业务定义
 主要是polymarket也一些基础的业务规则的定义。
 
-## Asset
-因为polymarket上面所有的资产，本质是一个二元期权。如果简化的来做的话，难度其实在于统计。
-举个例子来说，比如说做15m的BTC涨跌。因为因为参数这类都是token相关的。但是事后的统计，就有点麻烦了。
-计划是通过category来进行区分，但是感觉还是有些有点难搞。
-
-
-- id为slug+方向
-- external_id为token
-- validate_before：为结束时间。
-- category: 这个暂定吧。
 
 FUTURE:
 1. 考虑统计问题。
 
 
 """
+
+
+@dataclasses.dataclass
+class PolyMarketAsset(Asset):
+    """
+    ## Asset
+    因为polymarket上面所有的资产，本质是一个二元期权。如果简化的来做的话，难度其实在于统计。
+    举个例子来说，比如说做15m的BTC涨跌。因为因为参数这类都是token相关的。但是事后的统计，就有点麻烦了。
+    计划是通过category来进行区分，但是感觉还是有些有点难搞。
+
+    identify: 应该是market_slug+outcome
+    external_id: tokenId
+    """
+    market_slug: Optional[str] = None
+    outcome: Optional[str] = None
+    opposite_asset: Optional[str] = None
+    market_conditionId: Optional[str] = None
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Asset):
+            return NotImplemented
+        # Assets are considered equal if their id is equal. Other metadata
+        # (external_id, validate_before) is not part of identity used for
+        # hashing/keying.
+        return self.identify == other.identify
+
+    def __hash__(self) -> int:
+        # Use the unique id string as the basis for the hash so Asset can be
+        # safely used as a dict key or in sets.
+        return hash(self.identify)
 
 
 class PolyMarketMarketMakerAccount(Account):
@@ -58,7 +79,7 @@ class PolyMarketMarketMakerAccount(Account):
         self._config = config
         # Background periodic sync task handle. Created by `start_sync`.
         self._sync_task: Optional[asyncio.Task] = None
-        self._asset: Dict[Asset, Position] = dict()  # 资产/价格
+        self._asset: Dict[PolyMarketAsset, Position] = dict()  # 资产/价格
         self._clob_client = ClobClient(
             host=_CLOB_HOST,
             chain_id=POLYGON,
@@ -134,9 +155,8 @@ class PolyMarketMarketMakerAccount(Account):
         else:
             for position in positions:
                 asset_id = f"{position.slug}-{position.outcome}"
-                external_id = f"{position.asset}"
                 market_slug = position.slug
-                if market_slug is None:
+                if market_slug is None or position.asset is None:
                     logger.error(f"{position.slug}不存在，数据问题")
                     continue
                 if market_slug not in market_cache.keys():
@@ -150,11 +170,18 @@ class PolyMarketMarketMakerAccount(Account):
                 else:
                     validate_before = market_cache[market_slug]
 
-                asset = Asset(id=asset_id, external_id=external_id, validate_before=validate_before)
+                asset = PolyMarketAsset(identify=asset_id,
+                                        external_id=position.asset,
+                                        validate_before=validate_before,
+                                        market_slug=position.slug,
+                                        outcome=position.outcome,
+                                        opposite_asset=position.oppositeAsset,
+                                        market_conditionId=position.conditionId,
+                                        )
                 if position.curPrice is None or position.size is None:
                     logger.error(f"{position.slug}数据错误，价格或者数量不存在")
                     continue
-                position = Position(price=position.curPrice, quantity=position.size)
+                position = Position(price=position.curPrice, quantity=position.size, avg_price=position.avgPrice)
                 self._asset[asset] = position
 
     def stop_sync(self) -> None:

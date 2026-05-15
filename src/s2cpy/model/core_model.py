@@ -16,16 +16,20 @@ from typing import Protocol, Optional, Callable, Any, List
 class Position:
     price: float
     quantity: float
+    avg_price: Optional[float] = None
 
 
 @dataclasses.dataclass(eq=False)
 class Asset:
     """
+    identify: 应该是有意义的。方便用户去处理一些特殊逻辑。比如说多资产的时候，通过字段去区分。
+    external_id：看情况，有些有，有些没有，最好是在交易所的标识。
+    validate_before: 有效期。
     FUTURE：
     1. 加入一些其他信息，比如最ticker size这类
     2. 加入一些字段，方便实盘的统计
     """
-    id: str
+    identify: str
     external_id: Optional[str] = None
     validate_before: Optional[int] = None  # None代表永久有效，UTC的unix timestamp。精确到毫秒
 
@@ -35,12 +39,12 @@ class Asset:
         # Assets are considered equal if their id is equal. Other metadata
         # (external_id, validate_before) is not part of identity used for
         # hashing/keying.
-        return self.id == other.id
+        return self.identify == other.identify
 
     def __hash__(self) -> int:
         # Use the unique id string as the basis for the hash so Asset can be
         # safely used as a dict key or in sets.
-        return hash(self.id)
+        return hash(self.identify)
 
 
 @dataclasses.dataclass
