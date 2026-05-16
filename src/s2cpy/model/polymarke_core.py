@@ -8,10 +8,10 @@ from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
-from s2cpy.model.core_model import Account, Asset, Position
+from s2cpy.model.core_model import Account, Asset, Position, Order
 
 import asyncio
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from loguru import logger
 
@@ -23,42 +23,19 @@ _CLOB_HOST = "https://clob.polymarket.com"
 # 业务定义
 主要是polymarket也一些基础的业务规则的定义。
 
+## Asset
+因为polymarket上面所有的资产，本质是一个二元期权。如果简化的来做的话，难度其实在于统计。
+举个例子来说，比如说做15m的BTC涨跌。因为因为参数这类都是token相关的。但是事后的统计，就有点麻烦了。
+计划是通过category来进行区分，但是感觉还是有些有点难搞。
+
+identify: 应该是market_slug+outcome
+external_id: tokenId
 
 FUTURE:
 1. 考虑统计问题。
 
 
 """
-
-
-@dataclasses.dataclass
-class PolyMarketAsset(Asset):
-    """
-    ## Asset
-    因为polymarket上面所有的资产，本质是一个二元期权。如果简化的来做的话，难度其实在于统计。
-    举个例子来说，比如说做15m的BTC涨跌。因为因为参数这类都是token相关的。但是事后的统计，就有点麻烦了。
-    计划是通过category来进行区分，但是感觉还是有些有点难搞。
-
-    identify: 应该是market_slug+outcome
-    external_id: tokenId
-    """
-    market_slug: Optional[str] = None
-    outcome: Optional[str] = None
-    opposite_asset: Optional[str] = None
-    market_conditionId: Optional[str] = None
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Asset):
-            return NotImplemented
-        # Assets are considered equal if their id is equal. Other metadata
-        # (external_id, validate_before) is not part of identity used for
-        # hashing/keying.
-        return self.identify == other.identify
-
-    def __hash__(self) -> int:
-        # Use the unique id string as the basis for the hash so Asset can be
-        # safely used as a dict key or in sets.
-        return hash(self.identify)
 
 
 class PolyMarketMarketMakerAccount(Account):
@@ -79,7 +56,7 @@ class PolyMarketMarketMakerAccount(Account):
         self._config = config
         # Background periodic sync task handle. Created by `start_sync`.
         self._sync_task: Optional[asyncio.Task] = None
-        self._asset: Dict[PolyMarketAsset, Position] = dict()  # 资产/价格
+        self._asset: Dict[Asset, Position] = dict()  # 资产/价格
         self._clob_client = ClobClient(
             host=_CLOB_HOST,
             chain_id=POLYGON,
@@ -90,6 +67,7 @@ class PolyMarketMarketMakerAccount(Account):
         self._api_creds = self._clob_client.create_or_derive_api_key()
         self._clob_client.set_api_creds(self._api_creds)
         self._usdc_balance: float = 0.0
+        self._open_orders: Dict[str, Order] = dict()
 
     @property
     def asset_dict(self) -> Dict[Asset, Position]:
@@ -98,6 +76,13 @@ class PolyMarketMarketMakerAccount(Account):
     @property
     def usdc_balance(self) -> float:
         return self._usdc_balance
+
+    @property
+    def open_orders(self) -> Dict[str, Order]:
+        return self._open_orders
+
+    def get_order_by_id(self, order_id: str) -> Order:
+        return self._open_orders[order_id]
 
     async def start_sync(self, interval_seconds: int = 600):
         """
@@ -142,7 +127,12 @@ class PolyMarketMarketMakerAccount(Account):
         usdc_balance = int(balance_collateral["balance"]) / 1_000_000
         self._usdc_balance = usdc_balance
         open_orders = client.get_open_orders()
-        print(f"open_orders: {open_orders}")
+        for o in open_orders:
+            side = 1 if o["side"] == "BUY" else -1
+            id_: str = o["id"]
+            order = Order(id=id_, side=side, quantity=o["original_size"], quantity_match=o["size_matched"],
+                          status=o["status"], price=o["price"], extra_info=o)
+            self._open_orders[id_] = order
 
     async def _query_positions(self):
         gramma_api = GammaAPI()
@@ -170,22 +160,22 @@ class PolyMarketMarketMakerAccount(Account):
                 else:
                     validate_before = market_cache[market_slug]
 
-                asset = PolyMarketAsset(identify=asset_id,
-                                        external_id=position.asset,
-                                        validate_before=validate_before,
-                                        market_slug=position.slug,
-                                        outcome=position.outcome,
-                                        opposite_asset=position.oppositeAsset,
-                                        market_conditionId=position.conditionId,
-                                        )
+                asset = Asset(
+                    identify=asset_id,
+                    external_id=position.asset,
+                    validate_before=validate_before,
+                    extra_info=position.to_dict()
+                )
                 if position.curPrice is None or position.size is None:
                     logger.error(f"{position.slug}数据错误，价格或者数量不存在")
                     continue
-                position = Position(price=position.curPrice, quantity=position.size, avg_price=position.avgPrice)
+                position = Position(price=position.curPrice, quantity=position.size, avg_price=position.avgPrice,
+                                    extra_info=position.to_dict())
                 self._asset[asset] = position
 
-    def stop_sync(self) -> None:
-        """Cancel the periodic background sync task if running."""
-        if self._sync_task is not None and not self._sync_task.done():
-            self._sync_task.cancel()
-            self._sync_task = None
+
+def stop_sync(self) -> None:
+    """Cancel the periodic background sync task if running."""
+    if self._sync_task is not None and not self._sync_task.done():
+        self._sync_task.cancel()
+        self._sync_task = None

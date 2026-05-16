@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import List
+
 from tenacity import retry, wait_random, stop_after_attempt
 
 from s2cpy.infrastructure.http_client import HttpClient
@@ -28,7 +30,7 @@ from s2cpy.model.polymarket_io import (
     MarketGetBySlugRequest,
     MarketGetByIdRequest,
     PositionsResponse,
-    parse_positions_response,
+    parse_positions_response, parse_market_response, ListMarketsRequest,
 )
 
 
@@ -91,6 +93,27 @@ class GammaAPI:
         # Pass the Pydantic model class directly so get_and_parse can
         # construct the model (via model_validate_json / model_validate).
         return await self.get_and_parse(url, PublicSearchResponse, params=params, timeout=timeout)
+
+    async def list_markets(self, request: ListMarketsRequest, timeout: float = 30) -> List[Market]:
+        """Helper to find a market by its CLOB token ID.
+
+        Since Gamma API doesn't provide a direct endpoint for this, we perform a search
+        and filter results. This is less efficient than a direct lookup, so should be
+        used judiciously (e.g., caching results if doing multiple lookups).
+        """
+
+        url = f"{GammaAPI.BASE_URL}/markets"
+        params = request.model_dump(exclude_none=True)
+        # Use the helper parser which accepts arrays, wrapped {data: [...]},
+        # or single-market payloads and returns either Market or list[Market].
+        resp = await self.get_and_parse(url, parse_market_response, params=params, timeout=timeout)
+        # normalize to List[Market]
+        if isinstance(resp, list):
+            return resp
+        if isinstance(resp, Market):
+            return [resp]
+        # Fallback: if parser returned something unexpected, raise
+        raise PolymarketAPIError("Unexpected response shape from /markets")
 
     async def get_series_by_id(self, request: SeriesGetRequest, timeout: float = 30) -> "Series":
         """GET /series/{id} -> Series

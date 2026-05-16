@@ -13,10 +13,22 @@ from typing import Protocol, Optional, Callable, Any, List
 
 
 @dataclasses.dataclass
+class Order:
+    id: str
+    side: int  # 1:long/buy -1:short/sell
+    quantity: float
+    quantity_match: float
+    price: float
+    status: str
+    extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
+
+
+@dataclasses.dataclass
 class Position:
     price: float
     quantity: float
     avg_price: Optional[float] = None
+    extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
 
 
 @dataclasses.dataclass(eq=False)
@@ -32,6 +44,7 @@ class Asset:
     identify: str
     external_id: Optional[str] = None
     validate_before: Optional[int] = None  # None代表永久有效，UTC的unix timestamp。精确到毫秒
+    extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Asset):

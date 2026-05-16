@@ -559,6 +559,17 @@ class TokenPosition(BaseModel):
     endDate: Optional[str] = None
     negativeRisk: Optional[bool] = None
 
+    def to_dict(self, exclude_none: bool = True) -> dict:
+        """Return a plain dict of this TokenPosition's attributes and values.
+
+        - By default `exclude_none=True` so fields with value ``None`` are omitted.
+        - Extra/unexpected fields (allowed by model_config extra="allow") are
+          included in the returned dict.
+
+        This is a thin convenience wrapper around pydantic v2's ``model_dump``.
+        """
+        return self.model_dump(exclude_none=exclude_none)
+
 
 class PositionsResponse(BaseModel):
     """/positions 端点的响应封装。
@@ -694,6 +705,125 @@ class PublicSearchRequest(BaseModel):
             recurrence=recurrence,
             exclude_tag_id=exclude_tag_id,
             optimized=optimized,
+        )
+
+
+class ListMarketsRequest(BaseModel):
+    """Request model for GET /markets.
+
+    Mirrors the Gamma API `/markets` query parameters. Fields are optional and
+    intended for convenient IDE discoverability and to produce `params`
+    via `model_dump(exclude_none=True)` when calling the API.
+    """
+    # Pagination / ordering
+    limit: Optional[int] = Field(None, description="Results per page")
+    offset: Optional[int] = Field(None, description="Offset-based pagination")
+    order: Optional[str] = Field(None, description="Comma-separated list of fields to order by")
+    ascending: Optional[bool] = Field(None, description="Sort ascending if true")
+
+    # Basic filters / identifiers
+    id: Optional[List[int]] = Field(None, description="Filter by market id(s)")
+    slug: Optional[List[str]] = Field(None, description="Filter by slug(s) or event slug(s)")
+    clob_token_ids: Optional[List[str]] = Field(None, description="Filter by CLOB token IDs")
+    condition_ids: Optional[List[str]] = Field(None, description="Filter by condition ID(s)")
+    market_maker_address: Optional[List[str]] = Field(None, description="Filter by market maker address(es)")
+
+    # Numeric / range filters
+    liquidity_num_min: Optional[float] = Field(None, description="Minimum liquidity (numeric)")
+    liquidity_num_max: Optional[float] = Field(None, description="Maximum liquidity (numeric)")
+    volume_num_min: Optional[float] = Field(None, description="Minimum volume (numeric)")
+    volume_num_max: Optional[float] = Field(None, description="Maximum volume (numeric)")
+
+    # Date range filters (ISO 8601 strings)
+    start_date_min: Optional[str] = Field(None, description="Earliest start date (ISO 8601)")
+    start_date_max: Optional[str] = Field(None, description="Latest start date (ISO 8601)")
+    end_date_min: Optional[str] = Field(None, description="Earliest end date (ISO 8601)")
+    end_date_max: Optional[str] = Field(None, description="Latest end date (ISO 8601)")
+
+    # Tag / related filters
+    tag_id: Optional[int] = Field(None, description="Filter by tag ID")
+    related_tags: Optional[bool] = Field(None, description="Include related tags when filtering by tag_id")
+    exclude_tag_id: Optional[List[int]] = Field(None, description="Exclude markets matching these tag IDs")
+
+    # Misc filters
+    active: Optional[bool] = Field(None, description="Only active markets")
+    closed: Optional[bool] = Field(None, description="Include closed markets (default false)")
+    cyom: Optional[bool] = Field(None, description="CYOM markets filter")
+    uma_resolution_status: Optional[str] = Field(None, description="UMA resolution status filter")
+    game_id: Optional[str] = Field(None, description="Game identifier filter")
+    sports_market_types: Optional[List[str]] = Field(None, description="Filter by sports market types")
+    rewards_min_size: Optional[float] = Field(None, description="Minimum rewards size")
+    question_ids: Optional[List[str]] = Field(None, description="Filter by question IDs")
+    include_tag: Optional[bool] = Field(None, description="Whether to include tag data in response")
+
+    @classmethod
+    def build(
+        cls,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        after_cursor: Optional[str] = None,
+        order: Optional[str] = None,
+        ascending: Optional[bool] = None,
+        id: Optional[List[int]] = None,
+        slug: Optional[List[str]] = None,
+        clob_token_ids: Optional[List[str]] = None,
+        condition_ids: Optional[List[str]] = None,
+        market_maker_address: Optional[List[str]] = None,
+        liquidity_num_min: Optional[float] = None,
+        liquidity_num_max: Optional[float] = None,
+        volume_num_min: Optional[float] = None,
+        volume_num_max: Optional[float] = None,
+        start_date_min: Optional[str] = None,
+        start_date_max: Optional[str] = None,
+        end_date_min: Optional[str] = None,
+        end_date_max: Optional[str] = None,
+        tag_id: Optional[int] = None,
+        related_tags: Optional[bool] = None,
+        exclude_tag_id: Optional[List[int]] = None,
+        active: Optional[bool] = None,
+        closed: Optional[bool] = None,
+        cyom: Optional[bool] = None,
+        uma_resolution_status: Optional[str] = None,
+        game_id: Optional[str] = None,
+        sports_market_types: Optional[List[str]] = None,
+        rewards_min_size: Optional[float] = None,
+        question_ids: Optional[List[str]] = None,
+        include_tag: Optional[bool] = None,
+        uma_resolution_statuses: Optional[str] = None,
+    ) -> "ListMarketsRequest":
+        """Build helper to improve IDE discoverability when constructing request params."""
+        return cls(
+            limit=limit,
+            offset=offset,
+            after_cursor=after_cursor,
+            order=order,
+            ascending=ascending,
+            id=id,
+            slug=slug,
+            clob_token_ids=clob_token_ids,
+            condition_ids=condition_ids,
+            market_maker_address=market_maker_address,
+            liquidity_num_min=liquidity_num_min,
+            liquidity_num_max=liquidity_num_max,
+            volume_num_min=volume_num_min,
+            volume_num_max=volume_num_max,
+            start_date_min=start_date_min,
+            start_date_max=start_date_max,
+            end_date_min=end_date_min,
+            end_date_max=end_date_max,
+            tag_id=tag_id,
+            related_tags=related_tags,
+            exclude_tag_id=exclude_tag_id,
+            active=active,
+            closed=closed,
+            cyom=cyom,
+            uma_resolution_status=uma_resolution_status,
+            game_id=game_id,
+            sports_market_types=sports_market_types,
+            rewards_min_size=rewards_min_size,
+            question_ids=question_ids,
+            include_tag=include_tag,
+            uma_resolution_statuses=uma_resolution_statuses,
         )
 
 
@@ -846,19 +976,49 @@ def parse_event_response(data: Any) -> Event:
     return Event.model_validate(payload)
 
 
-def parse_market_response(data: Any) -> Market:
-    """Parse API response for a Market GET endpoint into a Market model.
+def parse_market_response(data: Any) -> Market | list[Market]:
+    """Parse API response for a Market GET endpoint into a Market model or list of Markets.
 
-    Accepts either a dict representing the Market, or a wrapper like {"data": {...}}.
+    Accepts the common shapes returned by the Gamma API:
+    - single market dict: { ... } -> returns Market
+    - wrapper: {"data": {...}} -> returns Market or list[Market]
+    - array of markets: [ {...}, {...} ] -> returns list[Market]
+    - already-constructed Market instance or list[Market] -> returned as-is
+
+    This makes callers robust to both single-resource endpoints and endpoints
+    that accidentally return arrays or wrapped payloads.
     """
-    if isinstance(data, dict) and "data" in data and isinstance(data["data"], dict):
-        payload = data["data"]
-    elif isinstance(data, dict):
-        payload = data
-    else:
-        raise TypeError("Unsupported market response format")
+    # If it's already a Market or list of Market, return as-is (or normalize list)
+    if isinstance(data, Market):
+        return data
 
-    return Market.model_validate(payload)
+    if isinstance(data, list):
+        # list of raw dicts or Market instances
+        result: list[Market] = []
+        for item in data:
+            if isinstance(item, Market):
+                result.append(item)
+            elif isinstance(item, dict):
+                result.append(Market.model_validate(item))
+            else:
+                raise TypeError("Unsupported item type in markets list")
+        return result
+
+    # If wrapped in {"data": ...}
+    if isinstance(data, dict) and "data" in data:
+        inner = data["data"]
+        # inner can be a list or dict
+        if isinstance(inner, list):
+            return [Market.model_validate(item) if not isinstance(item, Market) else item for item in inner]
+        if isinstance(inner, dict):
+            return Market.model_validate(inner)
+
+    # If plain dict representing single market
+    if isinstance(data, dict):
+        return Market.model_validate(data)
+
+    raise TypeError("Unsupported market response format")
+
 
 
 

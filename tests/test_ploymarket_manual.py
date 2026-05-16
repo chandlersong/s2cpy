@@ -1,5 +1,6 @@
 import asyncio
 import os
+
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
 
@@ -11,7 +12,20 @@ from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.exchange.polymarket_api import GammaAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
-from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
+from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest, \
+    ListMarketsRequest
+
+
+@pytest.mark.manual
+async def test_list_markets():
+    request = ListMarketsRequest.build(
+        clob_token_ids=['69324317355037271422943965141382095011871956039434394956830818206664869608517'])
+    cfg = get_global_config()
+    setup_global_logging(cfg.log)
+    api = GammaAPI()
+    markets = await api.list_markets(request)
+    for market in markets:
+        logger.info(market)
 
 
 @pytest.mark.manual
@@ -114,6 +128,10 @@ async def test_market_make_account() -> None:
     logger.info(f"账户有{len(asset_dict)}类资产")
     for asset, position in asset_dict.items():
         logger.info(f"asset: {asset}, position: {position}")
+    open_orders = account.open_orders
+    for order_id, open_order in open_orders.items():
+        logger.info(f"order_id: {order_id}, open_order: {open_order}")
+
     await asyncio.sleep(5)
 
 
