@@ -18,12 +18,13 @@ class CryptoRepeatDataFeed(DataFeed):
     def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
         self._coin_name = coin_name
         self._interval = interval
-        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(AttributeError("handler没有设置"))
+        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
+            AttributeError(f"CryptoRepeatDataFeed-{coin_name}-{interval},handler没有设置, 请检查代码"))
 
     def get_name(self) -> str:
         return self.domain_key
 
-    def supported_data_identify(self) -> list[str]:
+    def supported_data_list(self) -> list[str]:
         key = self.domain_key
         return [
             f"{key}.book",

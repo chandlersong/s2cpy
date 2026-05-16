@@ -132,7 +132,7 @@ async def test_market_make_account() -> None:
     for order_id, open_order in open_orders.items():
         logger.info(f"order_id: {order_id}, open_order: {open_order}")
 
-    await asyncio.sleep(5)
+    await asyncio.sleep(60 * 60)
 
 
 @pytest.mark.manual

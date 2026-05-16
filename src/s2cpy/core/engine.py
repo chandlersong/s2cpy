@@ -81,7 +81,7 @@ class SingleNodeLivingTradingEngine(Engine):
     async def register_data_feed(self, data_feed: DataFeed):
         self._data_feeds[data_feed.get_name()] = data_feed
         logger.info(f"data feed: {data_feed.get_name()} 注册")
-        support_topic = data_feed.supported_data_identify()
+        support_topic = data_feed.supported_data_list()
         data_feed.subscribe(self._message_handler)
         for topic in support_topic:
             self._signals[topic] = self._namespace.signal(topic)

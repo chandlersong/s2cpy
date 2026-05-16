@@ -101,7 +101,7 @@ class DataFeed(Protocol):
         pass
 
     @abc.abstractmethod
-    def supported_data_identify(self) -> list[str]:
+    def supported_data_list(self) -> list[str]:
         """
         提供本dataFeed支持的数据类型
         :return:
@@ -133,6 +133,24 @@ class Account(Protocol):
     # V1版本所有规则。
     1. 所有的order都是同步，不是异步的，不需要返回订单成功与否的信息。
     """
+
+    @abc.abstractmethod
+    def supported_data_list(self) -> list[str]:
+        """
+        提供本dataFeed支持的数据类型
+        :return:
+        """
+        pass
+
+    def start_sync(self, handler: Optional[DataHandler] = None, interval_seconds: int = 600):
+        """
+        表示账户开始工作。
+        因为本质上来说，本地的账户和服务器的账户，都是同步关系，本地需要和服务器保持同步。
+        :param handler: 消息的发送，为None表示不监听
+        :param interval_seconds: 同步周期
+        :return:
+        """
+        pass
 
     def create_order(self, asset: Asset, **kwargs) -> int:
         """

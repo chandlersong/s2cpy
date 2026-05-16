@@ -5,13 +5,14 @@ from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
 from py_clob_client_v2.constants import POLYGON
 
 from s2cpy.exchange.polymarket_api import GammaAPI
+from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
-from s2cpy.model.core_model import Account, Asset, Position, Order
+from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler
 
 import asyncio
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 from loguru import logger
 
@@ -52,6 +53,12 @@ class PolyMarketMarketMakerAccount(Account):
 
     """
 
+    def supported_data_list(self) -> list[str]:
+        return [
+            self._topic_order_created,
+            self._topic_trade,
+        ]
+
     def __init__(self, config: PolyMarketRelayerAccount):
         self._config = config
         # Background periodic sync task handle. Created by `start_sync`.
@@ -68,6 +75,11 @@ class PolyMarketMarketMakerAccount(Account):
         self._clob_client.set_api_creds(self._api_creds)
         self._usdc_balance: float = 0.0
         self._open_orders: Dict[str, Order] = dict()
+        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
+            AttributeError(f"handler没有设置，就是监听账户{self._config.name}, 请检查代码"))
+
+        self._topic_order_created = f"{self._config.name}.order_created"
+        self._topic_trade = f"{self._config.name}.trade"
 
     @property
     def asset_dict(self) -> Dict[Asset, Position]:
@@ -84,7 +96,7 @@ class PolyMarketMarketMakerAccount(Account):
     def get_order_by_id(self, order_id: str) -> Order:
         return self._open_orders[order_id]
 
-    async def start_sync(self, interval_seconds: int = 600):
+    async def start_sync(self, handler: Optional[DataHandler] = None, interval_seconds: int = 600):
         """
         Start an initial sync and schedule periodic syncs running in background.
 
@@ -108,6 +120,11 @@ class PolyMarketMarketMakerAccount(Account):
             self._sync_task = loop.create_task(
                 periodic_runner(lambda: self.sync_account_position(), interval_seconds)
             )
+
+        if handler is not None:
+            logger.info(f"{self._config.name}开始监听工作")
+            self._handler = handler
+            await self._start_websocket_listening()
 
     async def sync_account_position(self):
         """
@@ -173,9 +190,62 @@ class PolyMarketMarketMakerAccount(Account):
                                     extra_info=position.to_dict())
                 self._asset[asset] = position
 
+    def stop_sync(self) -> None:
+        """Cancel the periodic background sync task if running."""
+        if self._sync_task is not None and not self._sync_task.done():
+            self._sync_task.cancel()
+            self._sync_task = None
 
-def stop_sync(self) -> None:
-    """Cancel the periodic background sync task if running."""
-    if self._sync_task is not None and not self._sync_task.done():
-        self._sync_task.cancel()
-        self._sync_task = None
+    async def _start_websocket_listening(self) -> PolymarketWS:
+        config = self._config
+        logger.info(f"PolyMarket:Listening account for {config.name}")
+        url = "wss://ws-subscriptions-clob.polymarket.com/ws/user"  # public echo service (manual only)
+        ws = PolymarketWS(url, reconnect_attempts=2)
+        ws.register_handler("default", self._on_web_socket_message)
+        await ws.connect()
+        creds = self._api_creds
+        sub = {
+            "auth": {
+                "apiKey": creds.api_key,
+                "secret": creds.api_secret,
+                "passphrase": creds.api_passphrase
+
+            },
+            "type": "user",
+        }
+        await ws.send(sub)
+        return ws
+
+    def _on_web_socket_message(self, data: Dict[str, Any]):
+        logger.info(f"PolyMarket:WebSocket message: {data}")
+        event_type = data["event_type"]
+        if event_type == "order":  # 处理订单逻辑
+            self._on_web_socket_order(data)
+        elif event_type == "trade":  # 处理交易逻辑
+            pass
+
+    def _on_web_socket_order(self, data: Dict[str, Any]):
+        """
+        [polymarket order status](https://docs.polymarket.com/market-data/websocket/user-channel#order)
+        :param data:
+        :return:
+        """
+        order_type = data["type"]
+        if order_type == "PLACEMENT":  # null
+            side = 1 if data["side"] == "BUY" else -1
+            id_: str = data["id"]
+            order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
+                          status=data["type"], price=data["price"], extra_info=data)
+            self._open_orders[id_] = order
+
+            self._handler(self._topic_order_created, order)
+        elif order_type == "CANCELLATION":
+            id_: str = data["id"]
+            if id_ in self._open_orders:
+                self._open_orders.pop(id_)
+        elif order_type == "UPDATE":
+            id_: str = data["id"]
+            side = 1 if data["side"] == "BUY" else -1
+            order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
+                          status=data["type"], price=data["price"], extra_info=data)
+            self._open_orders[id_] = order
