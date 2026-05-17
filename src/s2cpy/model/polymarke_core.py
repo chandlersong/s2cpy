@@ -1,5 +1,4 @@
 import collections
-import dataclasses
 
 from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
 from py_clob_client_v2.constants import POLYGON
@@ -38,6 +37,14 @@ FUTURE:
 
 """
 
+POLYMARKET_ACCOUNT_TOPICS = {
+    "new_order": "{name}.order_created",
+    "order_update": "{name}.order_updated",
+    "order_cancelled": "{name}.order_cancelled",
+    "trade_confirm": "{name}.trade_confirm",
+    "trade_failed": "{name}.trade_failed",
+}
+
 
 class PolyMarketMarketMakerAccount(Account):
     """
@@ -54,10 +61,14 @@ class PolyMarketMarketMakerAccount(Account):
     """
 
     def supported_data_list(self) -> list[str]:
+
+        account_name = self._config.name
         return [
-            self._topic_order_created,
-            self._topic_trade,
+            template.format(name=account_name) for template in POLYMARKET_ACCOUNT_TOPICS.values()
         ]
+
+    def get_topic(self, topic: str) -> str:
+        return POLYMARKET_ACCOUNT_TOPICS[topic].format(name=self._config.name)
 
     def __init__(self, config: PolyMarketRelayerAccount):
         self._config = config
@@ -135,6 +146,7 @@ class PolyMarketMarketMakerAccount(Account):
         """
         await self._query_positions()
         await self._query_balance()
+        await self._query_open_orders()
 
     async def _query_balance(self):
         client = self._clob_client
@@ -143,7 +155,9 @@ class PolyMarketMarketMakerAccount(Account):
         )
         usdc_balance = int(balance_collateral["balance"]) / 1_000_000
         self._usdc_balance = usdc_balance
-        open_orders = client.get_open_orders()
+
+    async def _query_open_orders(self):
+        open_orders = self._clob_client.get_open_orders()
         for o in open_orders:
             side = 1 if o["side"] == "BUY" else -1
             id_: str = o["id"]
@@ -222,10 +236,29 @@ class PolyMarketMarketMakerAccount(Account):
         if event_type == "order":  # 处理订单逻辑
             self._on_web_socket_order(data)
         elif event_type == "trade":  # 处理交易逻辑
-            pass
+            self._on_web_socket_trade(data)
+
+    def _on_web_socket_trade(self, data: Dict[str, Any]):
+        """
+        [官方资料](https://docs.polymarket.com/market-data/websocket/user-channel#trade)
+        1. 根据资料，整个trade有五个，为了简化，只把failed和confirm做处理。
+        :param data:
+        :return:
+        """
+        trade_type = data["event_type"]
+        if trade_type == "CONFIRMED":
+            self._handler(self.get_topic("trade_confirm"), data)
+        elif trade_type == "FAILED":
+            self._handler(self.get_topic("trade_failed"), data)
+        else:
+            return
+        #  TODO: 根据trade来内存修改position，这里算是偷懒了。性能会有点低
+        self._query_positions()
+        self._query_balance()
 
     def _on_web_socket_order(self, data: Dict[str, Any]):
         """
+
         [polymarket order status](https://docs.polymarket.com/market-data/websocket/user-channel#order)
         :param data:
         :return:
@@ -238,14 +271,22 @@ class PolyMarketMarketMakerAccount(Account):
                           status=data["type"], price=data["price"], extra_info=data)
             self._open_orders[id_] = order
 
-            self._handler(self._topic_order_created, order)
+            self._handler(self.get_topic("new_order"), order)
         elif order_type == "CANCELLATION":
             id_: str = data["id"]
             if id_ in self._open_orders:
-                self._open_orders.pop(id_)
+                pop = self._open_orders.pop(id_)
+                pop.status = "CANCELLATION"
+                pop.extra_info = data
+                self._handler(self.get_topic("order_update"), pop)
         elif order_type == "UPDATE":
+
             id_: str = data["id"]
             side = 1 if data["side"] == "BUY" else -1
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
                           status=data["type"], price=data["price"], extra_info=data)
             self._open_orders[id_] = order
+            self._handler(self.get_topic("order_cancelled"), order)
+        #  TODO: 根据order来内存修改position，这里算是偷懒了。性能会有点低
+        self._query_positions()
+        self._query_balance()
