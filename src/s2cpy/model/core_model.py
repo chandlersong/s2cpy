@@ -152,21 +152,17 @@ class Account(Protocol):
         """
         pass
 
-    def create_order(self, asset: Asset, **kwargs) -> int:
+    def create_order(self, **kwargs) -> Optional[str]:
         """
         placeHolder的方法，因为要支持多交易所的支持。
         过早的统一参数，太麻烦。
         所以暂时负责每隔交易所单独的参数
-        :param asset: 交易的资产
         :param kwargs: 各个交易所自己独立的参数
         :return: order_id
         """
         pass
 
-    def cancel_order(self, order_id: int):
-        pass
-
-    def cancel_all_orders(self):
+    def cancel_order(self, order_ids: list[str]):
         pass
 
     @property

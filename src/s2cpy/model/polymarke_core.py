@@ -1,6 +1,7 @@
 import collections
 
-from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
+from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType, PartialCreateOrderOptions, OrderArgs, Side, \
+    OrderType, SignatureTypeV2, OrderPayload
 from py_clob_client_v2.constants import POLYGON
 
 from s2cpy.exchange.polymarket_api import GammaAPI
@@ -60,6 +61,40 @@ class PolyMarketMarketMakerAccount(Account):
 
     """
 
+    def create_order(self,**kwargs) -> Optional[str]:
+        # TODO： 动态的获得这个ticker
+        options = PartialCreateOrderOptions(
+            tick_size="0.001"
+        )
+        try:
+            order = self._clob_client.create_and_post_order(
+                order_args=OrderArgs(
+                    **kwargs
+                ),
+                options=options,
+                order_type=OrderType.GTC,
+                post_only=True
+            )
+            logger.info(f"create order success,{order}")
+            return str(order["orderID"])
+        except Exception as e:
+            logger.error(f"Create order error: {e}")
+
+    def cancel_order(self, order_ids: list[str]):
+        self._clob_client.cancel_orders(order_ids)
+
+    async def heartbeat_loop(self):
+        heartbeat_id = ""  # 第一次必须为空字符串
+        while True:
+            try:
+                if len(self._open_orders) != 0:
+                    resp = self._clob_client.post_heartbeat(heartbeat_id)
+                    if resp and isinstance(resp, dict) and "heartbeat_id" in resp:
+                        heartbeat_id = resp["heartbeat_id"]
+            except Exception as e:
+                logger.error(f"Heartbeat error: {e}")
+            await asyncio.sleep(8)  # 每5秒一次
+
     def __init__(self, config: PolyMarketRelayerAccount):
         self._config = config
         # Background periodic sync task handle. Created by `start_sync`.
@@ -70,7 +105,7 @@ class PolyMarketMarketMakerAccount(Account):
             chain_id=POLYGON,
             key=self._config.private_key,
             funder=self._config.funder_address,
-            signature_type=3,  # POLY_1271 Deposit Wallet
+            signature_type=SignatureTypeV2.POLY_1271,  # POLY_1271 Deposit Wallet
         )
         self._api_creds = self._clob_client.create_or_derive_api_key()
         self._clob_client.set_api_creds(self._api_creds)
@@ -78,6 +113,10 @@ class PolyMarketMarketMakerAccount(Account):
         self._open_orders: Dict[str, Order] = dict()
         self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
             AttributeError(f"handler没有设置，就是监听账户{self._config.name}, 请检查代码"))
+        try:
+            asyncio.create_task(self.heartbeat_loop())
+        except RuntimeError:
+            logger.exception("Failed to schedule background task for sync_account_position")
 
     @property
     def name(self):
