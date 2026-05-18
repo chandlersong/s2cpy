@@ -4,6 +4,8 @@ from s2cpy.infrastructure.time import TimeInterval
 from s2cpy.model.core_model import Strategy, Data, Account
 from loguru import logger
 
+from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount, POLYMARKET_ACCOUNT_TOPICS
+
 
 class PolyMarketRepeatDemoStrategy(Strategy):
 
@@ -11,20 +13,27 @@ class PolyMarketRepeatDemoStrategy(Strategy):
         pass
 
     def data_list(self) -> List[str]:
-        key = self.domain_key
-        return [
-            f"{key}.book",
-            f"{key}.price_change",
-            f"{key}.tick_size_change",
-            f"{key}.last_trade_price",
-            f"{key}.best_bid_ask",
-            f"{key}.new_market",
-            f"{key}.market_resolved",
+        market = self.domain_key
+        market_topic = [
+            f"{market}.book",
+            f"{market}.price_change",
+            f"{market}.tick_size_change",
+            f"{market}.last_trade_price",
+            f"{market}.best_bid_ask",
+            f"{market}.new_market",
+            f"{market}.market_resolved",
         ]
 
-    def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
+        account_topic = [t.format(name=self._account.name) for t in POLYMARKET_ACCOUNT_TOPICS.values()]
+        logger.info(f"策略注册账户的topic:{account_topic}")
+        logger.info(f"策略注册市场的topic:{market_topic}")
+        return account_topic
+
+    def __init__(self, account: PolyMarketMarketMakerAccount, coin_name="btc",
+                 interval: TimeInterval = TimeInterval.FifteenMinute):
         self._coin_name = coin_name
         self._interval = interval
+        self._account = account
 
     def get_name(self) -> str:
         return self.domain_key

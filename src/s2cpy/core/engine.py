@@ -51,13 +51,13 @@ class SingleNodeLivingTradingEngine(Engine):
     STATUS_RUNNING = "running"
     STATUS_STOPPED = "stopped"
 
-    def __init__(self, account: List[Account]):
+    def __init__(self):
         self._namespace = Namespace()
         self._signals: Dict[str, NamedSignal] = {}
         self._strategies: Dict[str, Strategy] = {}
         self._data_feeds: Dict[str, DataFeed] = {}
+        self._accounts: Dict[str, Account] = {}
         self._status = self.STATUS_READY
-        self.account = account
 
     async def register_strategy(self, strategy: Strategy, account_names: Optional[List[str]] = None):
         self._strategies[strategy.get_name()] = strategy
@@ -74,6 +74,13 @@ class SingleNodeLivingTradingEngine(Engine):
 
     async def start(self):
         logger.info(f"开始运行交易的engine")
+        for account in self._accounts.values():
+            logger.info(f"开始监听账户{account.name}")
+            await account.start_sync(self._message_handler)
+            support_topic = account.supported_data_list()
+            for topic in support_topic:
+                self._signals[topic] = self._namespace.signal(topic)
+                logger.info(f"账户监测: {topic} 加入总线")
         for data_feed in self._data_feeds.values():
             logger.info(f"data feed: {data_feed.get_name()} 启动")
             await data_feed.start()
@@ -89,6 +96,18 @@ class SingleNodeLivingTradingEngine(Engine):
         if self._status == self.STATUS_RUNNING:
             await data_feed.start()
             logger.info(f"data feed: {data_feed.get_name()} 启动")
+
+    async def register_account(self, account: Account):
+        acc_name = account.name
+        self._accounts[acc_name] = account
+        logger.info(f"账户: {acc_name} 注册")
+        support_topic = account.supported_data_list()
+        for topic in support_topic:
+            self._signals[topic] = self._namespace.signal(topic)
+            logger.info(f"data identify: {topic} 加入总线")
+        if self._status == self.STATUS_RUNNING:
+            await account.start_sync(self._message_handler)
+            logger.info(f"账户监听: {acc_name} 启动")
 
     def _message_handler(self, topic: str, data: Any):
         signal = self._signals.get(topic)

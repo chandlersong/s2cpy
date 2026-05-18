@@ -142,7 +142,7 @@ class Account(Protocol):
         """
         pass
 
-    def start_sync(self, handler: Optional[DataHandler] = None, interval_seconds: int = 600):
+    async def start_sync(self, handler: Optional[DataHandler] = None, interval_seconds: int = 600):
         """
         表示账户开始工作。
         因为本质上来说，本地的账户和服务器的账户，都是同步关系，本地需要和服务器保持同步。
@@ -168,6 +168,10 @@ class Account(Protocol):
 
     def cancel_all_orders(self):
         pass
+
+    @property
+    def name(self) -> str:
+        raise NotImplementedError("请给你的账户定义名字")
 
 
 class Strategy(Protocol):

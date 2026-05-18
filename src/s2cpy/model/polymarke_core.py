@@ -60,16 +60,6 @@ class PolyMarketMarketMakerAccount(Account):
 
     """
 
-    def supported_data_list(self) -> list[str]:
-
-        account_name = self._config.name
-        return [
-            template.format(name=account_name) for template in POLYMARKET_ACCOUNT_TOPICS.values()
-        ]
-
-    def get_topic(self, topic: str) -> str:
-        return POLYMARKET_ACCOUNT_TOPICS[topic].format(name=self._config.name)
-
     def __init__(self, config: PolyMarketRelayerAccount):
         self._config = config
         # Background periodic sync task handle. Created by `start_sync`.
@@ -89,8 +79,19 @@ class PolyMarketMarketMakerAccount(Account):
         self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
             AttributeError(f"handler没有设置，就是监听账户{self._config.name}, 请检查代码"))
 
-        self._topic_order_created = f"{self._config.name}.order_created"
-        self._topic_trade = f"{self._config.name}.trade"
+    @property
+    def name(self):
+        return self._config.name
+
+    def supported_data_list(self) -> list[str]:
+
+        account_name = self._config.name
+        return [
+            template.format(name=account_name) for template in POLYMARKET_ACCOUNT_TOPICS.values()
+        ]
+
+    def get_topic(self, topic: str) -> str:
+        return POLYMARKET_ACCOUNT_TOPICS[topic].format(name=self._config.name)
 
     @property
     def asset_dict(self) -> Dict[Asset, Position]:
@@ -231,7 +232,7 @@ class PolyMarketMarketMakerAccount(Account):
         return ws
 
     def _on_web_socket_message(self, data: Dict[str, Any]):
-        logger.info(f"PolyMarket:WebSocket message: {data}")
+        logger.debug(f"PolyMarket:WebSocket message: {data}")
         event_type = data["event_type"]
         if event_type == "order":  # 处理订单逻辑
             self._on_web_socket_order(data)
@@ -253,8 +254,13 @@ class PolyMarketMarketMakerAccount(Account):
         else:
             return
         #  TODO: 根据trade来内存修改position，这里算是偷懒了。性能会有点低
-        self._query_positions()
-        self._query_balance()
+        # Schedule async coroutine to run in the event loop so this sync handler
+        # does not need to be async. The websocket client schedules handlers on
+        # the running loop, so create_task is safe here.
+        try:
+            asyncio.create_task(self.sync_account_position())
+        except RuntimeError:
+            logger.exception("Failed to schedule background task for sync_account_position")
 
     def _on_web_socket_order(self, data: Dict[str, Any]):
         """
@@ -278,7 +284,8 @@ class PolyMarketMarketMakerAccount(Account):
                 pop = self._open_orders.pop(id_)
                 pop.status = "CANCELLATION"
                 pop.extra_info = data
-                self._handler(self.get_topic("order_update"), pop)
+                self._handler(self.get_topic("order_cancelled"), pop)
+
         elif order_type == "UPDATE":
 
             id_: str = data["id"]
@@ -286,7 +293,15 @@ class PolyMarketMarketMakerAccount(Account):
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
                           status=data["type"], price=data["price"], extra_info=data)
             self._open_orders[id_] = order
-            self._handler(self.get_topic("order_cancelled"), order)
+            self._handler(self.get_topic("order_update"), order)
+        # Schedule a background sync of positions/balance instead of calling the
+        # async coroutine directly (avoids 'coroutine was never awaited').
+        try:
+            asyncio.create_task(self.sync_account_position())
+        except RuntimeError:
+            logger.exception("Failed to schedule background task for sync_account_position")
+
+    async def sync_balance_and_positions(self):
         #  TODO: 根据order来内存修改position，这里算是偷懒了。性能会有点低
-        self._query_positions()
-        self._query_balance()
+        await asyncio.create_task(self._query_positions())
+        await asyncio.create_task(self._query_balance())

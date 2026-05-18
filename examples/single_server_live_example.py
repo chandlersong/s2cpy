@@ -1,10 +1,15 @@
+import os
+
+os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
+os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
 import asyncio
 import signal
 from loguru import logger
 
 from s2cpy.core.engine import SingleNodeLivingTradingEngine
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
-from s2cpy.infrastructure.settings import get_global_config, setup_global_logging
+from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
+from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
 from s2cpy.strategy.demo_strategies import PolyMarketRepeatDemoStrategy
 
 
@@ -20,11 +25,20 @@ async def main():
     setup_global_logging(config.log)
 
     account_list = config.accounts
+    polymarket_account = account_list.get("main")
+    if not isinstance(polymarket_account, PolyMarketRelayerAccount):
+        logger.error("第一个账户必须是PolyMarketRelayerAccount")
+        return
 
-    engine = SingleNodeLivingTradingEngine([])
+    engine = SingleNodeLivingTradingEngine()
+    # 连接账户
+    account = PolyMarketMarketMakerAccount(polymarket_account)
+    await engine.register_account(account)
+
     repeat_data_feed = CryptoRepeatDataFeed()
     await engine.register_data_feed(repeat_data_feed)
-    demo_strategy = PolyMarketRepeatDemoStrategy()
+
+    demo_strategy = PolyMarketRepeatDemoStrategy(account)
     await engine.register_strategy(demo_strategy)
 
     engine_task = asyncio.create_task(engine.start())
