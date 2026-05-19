@@ -57,7 +57,6 @@ class CryptoRepeatDataFeed(DataFeed):
             return
         self._rotation_task = asyncio.create_task(self._rotation_loop())
 
-
     async def _rotation_loop(self):
         """
         Internal coroutine that performs the periodic sleep/rotate cycle for
@@ -138,6 +137,7 @@ class OneMarketDataFeed(DataFeed):
     """
     对于单市场的websocket的监听
     """
+    EVENT_LIST = ["book", "tick_size_change", "last_trade_price", "best_bid_ask"]
 
     def __init__(self, market_slug: str):
         self._market_slug = market_slug
@@ -152,13 +152,7 @@ class OneMarketDataFeed(DataFeed):
 
     def supported_data_list(self) -> list[str]:
         key = self.name
-        return [
-            f"{key}.book",
-            f"{key}.price_change",
-            f"{key}.tick_size_change",
-            f"{key}.last_trade_price",
-            f"{key}.best_bid_ask",
-        ]
+        return [f"{key}.{event_type}" for event_type in self.EVENT_LIST]
 
     async def start(self):
         """
@@ -225,7 +219,7 @@ class OneMarketDataFeed(DataFeed):
     def _on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
         key = self.name
-        if event_type in ["book", "price_change", "tick_size_change", "last_trade_price", "best_bid_ask"]:
+        if event_type in  self.EVENT_LIST:
             self._handler(f"{key}.{event_type}", data)
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:

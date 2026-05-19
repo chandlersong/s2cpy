@@ -1,7 +1,7 @@
 from typing import List
-
 from loguru import logger
 
+from s2cpy.data_feeds.ploymarket_feed import OneMarketDataFeed
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.model.core_model import Strategy, Data
 from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
@@ -18,13 +18,7 @@ class PolyMarketGLFTStrategy(Strategy):
 
     def data_list(self) -> List[str]:
         key = self.name
-        return [
-            f"{key}.book",
-            f"{key}.price_change",
-            f"{key}.tick_size_change",
-            f"{key}.last_trade_price",
-            f"{key}.best_bid_ask",
-        ]
+        return [f"{key}.{event_type}" for event_type in OneMarketDataFeed.EVENT_LIST]
 
     async def start(self):
         gamma_api = RestfulAPI()
@@ -43,3 +37,5 @@ class PolyMarketGLFTStrategy(Strategy):
 
     def on_change(self, data: Data):
         logger.info(f"strategy {self.name} receive: {data}")
+
+

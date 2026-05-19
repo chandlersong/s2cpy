@@ -1,5 +1,10 @@
 import asyncio
+import json
 import os
+
+import pandas as pd
+
+from s2cpy.infrastructure.time import get_unix_seconds_utc
 
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
@@ -27,6 +32,39 @@ async def test_list_markets():
     markets = await api.list_markets(request)
     for market in markets:
         logger.info(market)
+
+
+@pytest.mark.manual
+async def test_find_test_market():
+    """
+    主要是为了方便交易的一些市场
+    1. 高流通性
+    2. 至少还要跑一周
+    :return:
+    """
+    one_week_later = get_unix_seconds_utc() + 7 * 24 * 60 * 60
+    request = ListMarketsRequest.build(liquidity_num_min=100000, end_date_min=one_week_later,order="volume24hr",limit=100,ascending="false")
+    cfg = get_global_config()
+    setup_global_logging(cfg.log)
+    api = RestfulAPI()
+    markets = await api.list_markets(request)
+    logger.info(f"markets num : {len(markets)}")
+    data = []
+    for market in markets:
+        market_slug = market.slug
+        outcome_prices = json.loads(market.outcomePrices)
+        yes_price = float(outcome_prices[0])
+        no_price = float(outcome_prices[1])
+        tokens = market.clobTokenIds
+        yes_token = tokens[0]
+        no_token = tokens[1]
+        end_date = market.endDate
+        first_event = market.events[0]
+        first_event_slug = first_event.slug
+        data.append([market_slug, yes_price, no_price, yes_token, no_token, end_date, first_event_slug])
+
+    df = pd.DataFrame(data, columns=['market_slug', 'yes_price', 'no_price', 'yes_token', 'no_token', 'end_date','first_event_slug' ])
+    df.to_csv("test_market.csv", encoding='utf-8-sig', index=False)
 
 
 @pytest.mark.manual

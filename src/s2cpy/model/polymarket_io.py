@@ -723,7 +723,7 @@ class ListMarketsRequest(BaseModel):
     limit: Optional[int] = Field(None, description="Results per page")
     offset: Optional[int] = Field(None, description="Offset-based pagination")
     order: Optional[str] = Field(None, description="Comma-separated list of fields to order by")
-    ascending: Optional[bool] = Field(None, description="Sort ascending if true")
+    ascending: Optional[str] = Field(None, description="Sort ascending if true")
 
     # Basic filters / identifiers
     id: Optional[List[int]] = Field(None, description="Filter by market id(s)")
@@ -739,10 +739,10 @@ class ListMarketsRequest(BaseModel):
     volume_num_max: Optional[float] = Field(None, description="Maximum volume (numeric)")
 
     # Date range filters (ISO 8601 strings)
-    start_date_min: Optional[str] = Field(None, description="Earliest start date (ISO 8601)")
-    start_date_max: Optional[str] = Field(None, description="Latest start date (ISO 8601)")
-    end_date_min: Optional[str] = Field(None, description="Earliest end date (ISO 8601)")
-    end_date_max: Optional[str] = Field(None, description="Latest end date (ISO 8601)")
+    start_date_min: Optional[int] = Field(None, description="Earliest start date (ISO 8601)")
+    start_date_max: Optional[int] = Field(None, description="Latest start date (ISO 8601)")
+    end_date_min: Optional[int] = Field(None, description="Earliest end date (ISO 8601)")
+    end_date_max: Optional[int] = Field(None, description="Latest end date (ISO 8601)")
 
     # Tag / related filters
     tag_id: Optional[int] = Field(None, description="Filter by tag ID")
@@ -767,7 +767,7 @@ class ListMarketsRequest(BaseModel):
         offset: Optional[int] = None,
         after_cursor: Optional[str] = None,
         order: Optional[str] = None,
-        ascending: Optional[bool] = None,
+        ascending: Optional[str] = None,
         id: Optional[List[int]] = None,
         slug: Optional[List[str]] = None,
         clob_token_ids: Optional[List[str]] = None,
@@ -777,10 +777,10 @@ class ListMarketsRequest(BaseModel):
         liquidity_num_max: Optional[float] = None,
         volume_num_min: Optional[float] = None,
         volume_num_max: Optional[float] = None,
-        start_date_min: Optional[str] = None,
-        start_date_max: Optional[str] = None,
-        end_date_min: Optional[str] = None,
-        end_date_max: Optional[str] = None,
+        start_date_min: Optional[int] = None,
+        start_date_max: Optional[int] = None,
+        end_date_min: Optional[int] = None,
+        end_date_max: Optional[int] = None,
         tag_id: Optional[int] = None,
         related_tags: Optional[bool] = None,
         exclude_tag_id: Optional[List[int]] = None,
@@ -799,7 +799,6 @@ class ListMarketsRequest(BaseModel):
         return cls(
             limit=limit,
             offset=offset,
-            after_cursor=after_cursor,
             order=order,
             ascending=ascending,
             id=id,
