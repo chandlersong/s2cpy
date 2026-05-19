@@ -1,8 +1,8 @@
 import asyncio
 from types import CoroutineType
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from s2cpy.exchange.polymarket_api import GammaAPI
+from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc
 from s2cpy.model.core_model import DataFeed, DataHandler
@@ -18,10 +18,12 @@ class CryptoRepeatDataFeed(DataFeed):
     def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
         self._coin_name = coin_name
         self._interval = interval
+        self._rotation_task: Optional[asyncio.Task] = None
         self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
             AttributeError(f"CryptoRepeatDataFeed-{coin_name}-{interval},handler没有设置, 请检查代码"))
 
-    def get_name(self) -> str:
+    @property
+    def name(self) -> str:
         return self.domain_key
 
     def supported_data_list(self) -> list[str]:
@@ -47,6 +49,24 @@ class CryptoRepeatDataFeed(DataFeed):
         :return:
         """
         # Start initial listener
+        # Start the rotation loop in the background and return immediately.
+        # This keeps the websocket reconnection loop running without blocking
+        # the caller. The created asyncio.Task is stored on the instance so
+        # it can be cancelled via `await stop()`.
+        if self._rotation_task is not None and not self._rotation_task.done():
+            return
+        self._rotation_task = asyncio.create_task(self._rotation_loop())
+
+
+    async def _rotation_loop(self):
+        """
+        Internal coroutine that performs the periodic sleep/rotate cycle for
+        the websocket connection. Extracted from `start` to make the loop
+        clearer and reusable while preserving the original semantics: if the
+        coroutine is cancelled it will close the current websocket and
+        re-raise the CancelledError; on normal exit it ensures the ws is
+        closed.
+        """
         ws = await self.start_listening()
 
         # compute next market start timestamp (ms since epoch)
@@ -91,12 +111,131 @@ class CryptoRepeatDataFeed(DataFeed):
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:
         logger.info(f"PolyMarket:Getting last market from {self.current_slug}")
-        gamma_api = GammaAPI()
+        gamma_api = RestfulAPI()
         reqeust = MarketGetBySlugRequest(slug=self.current_slug)
         return gamma_api.get_market_by_slug(reqeust)
 
     async def start_listening(self) -> PolymarketWS:
         logger.info(f"PolyMarket:Listening for {self.current_slug}")
+        url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"  # public echo service (manual only)
+        ws = PolymarketWS(url, reconnect_attempts=2)
+        ws.register_handler("default", self._on_web_socket_message)
+        await ws.connect()
+        market = await self.get_last_market()
+        logger.info(f"WS connected to {url}")
+        sub = {
+            "assets_ids": market.clobTokenIds,
+            "type": "market",
+            "initial_dump": False,
+            "level": 2,
+            "custom_feature_enabled": True
+        }
+        await ws.send(sub)
+        return ws
+
+
+class OneMarketDataFeed(DataFeed):
+    """
+    对于单市场的websocket的监听
+    """
+
+    def __init__(self, market_slug: str):
+        self._market_slug = market_slug
+        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
+            AttributeError(f"polymarket OneMarketDataFeed-{market_slug},handler没有设置, 请检查代码"))
+        # Background rotation task (asyncio.Task) if started via start()
+        self._rotation_task: Optional[asyncio.Task] = None
+
+    @property
+    def name(self) -> str:
+        return self._market_slug
+
+    def supported_data_list(self) -> list[str]:
+        key = self.name
+        return [
+            f"{key}.book",
+            f"{key}.price_change",
+            f"{key}.tick_size_change",
+            f"{key}.last_trade_price",
+            f"{key}.best_bid_ask",
+        ]
+
+    async def start(self):
+        """
+        :return:
+        """
+        # Start the rotation loop in the background and return immediately.
+        # This keeps the websocket reconnection loop running without blocking
+        # the caller. The created asyncio.Task is stored on the instance so
+        # it can be cancelled via `await stop()`.
+        if self._rotation_task is not None and not self._rotation_task.done():
+            return
+        self._rotation_task = asyncio.create_task(self._rotation_loop())
+
+    async def stop(self):
+        """
+        Stop the background rotation loop (if running) and ensure the
+        websocket is closed. This method is idempotent.
+        """
+        task = self._rotation_task
+        if task is None:
+            return
+
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        self._rotation_task = None
+
+    async def _rotation_loop(self):
+        """
+        Internal coroutine that performs the periodic sleep/rotate cycle for
+        the websocket connection. Extracted from `start` to make the loop
+        clearer and reusable while preserving the original semantics: if the
+        coroutine is cancelled it will close the current websocket and
+        re-raise the CancelledError; on normal exit it ensures the ws is
+        closed.
+        """
+        ws: Optional[PolymarketWS] = None
+        try:
+            while True:
+                ws = await self.start_listening()
+                try:
+                    await asyncio.sleep(5)
+                except asyncio.CancelledError:
+                    # on cancellation ensure websocket is closed then re-raise
+                    if ws is not None:
+                        await ws.close()
+                    raise
+
+                # rotate connection
+                if ws is not None:
+                    await ws.close()
+
+        finally:
+            if ws is not None:
+                await ws.close()
+
+    def subscribe(self, handler: DataHandler):
+        self._handler = handler
+
+    def _on_web_socket_message(self, data: Dict[str, Any]):
+        event_type = data["event_type"]
+        key = self.name
+        if event_type in ["book", "price_change", "tick_size_change", "last_trade_price", "best_bid_ask"]:
+            self._handler(f"{key}.{event_type}", data)
+
+    def get_last_market(self) -> CoroutineType[Any, Any, Market]:
+        logger.info(f"PolyMarket:Getting last market from {self._market_slug}")
+        gamma_api = RestfulAPI()
+        reqeust = MarketGetBySlugRequest(slug=self._market_slug)
+        return gamma_api.get_market_by_slug(reqeust)
+
+    async def start_listening(self) -> PolymarketWS:
+        logger.info(f"PolyMarket:Listening for {self._market_slug}")
         url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"  # public echo service (manual only)
         ws = PolymarketWS(url, reconnect_attempts=2)
         ws.register_handler("default", self._on_web_socket_message)

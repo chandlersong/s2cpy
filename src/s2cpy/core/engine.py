@@ -60,17 +60,17 @@ class SingleNodeLivingTradingEngine(Engine):
         self._status = self.STATUS_READY
 
     async def register_strategy(self, strategy: Strategy, account_names: Optional[List[str]] = None):
-        self._strategies[strategy.get_name()] = strategy
+        self._strategies[strategy.name] = strategy
         data_list = strategy.data_list()
 
-        logger.info(f"注册策略: {strategy.get_name()}")
+        logger.info(f"注册策略: {strategy.name}")
         for topic in data_list:
             signal = self._signals.get(topic)
             if signal:
                 signal.connect(strategy.on_change)
-                logger.info(f"策略: {strategy.get_name()} 订阅了数据: {topic}")
+                logger.info(f"策略: {strategy.name} 订阅了数据: {topic}")
             else:
-                logger.warning(f"没有找到数据: {topic} 的信号，策略: {strategy.get_name()} 无法订阅")
+                logger.warning(f"没有找到数据: {topic} 的信号，策略: {strategy.name} 无法订阅")
 
     async def start(self):
         logger.info(f"开始运行交易的engine")
@@ -82,12 +82,15 @@ class SingleNodeLivingTradingEngine(Engine):
                 self._signals[topic] = self._namespace.signal(topic)
                 logger.info(f"账户监测: {topic} 加入总线")
         for data_feed in self._data_feeds.values():
-            logger.info(f"data feed: {data_feed.get_name()} 启动")
+            logger.info(f"data feed: {data_feed.name} 启动")
             await data_feed.start()
+        for strategy in self._strategies.values():
+            logger.info(f"策略{strategy.name}开始运行")
+            await strategy.start()
 
     async def register_data_feed(self, data_feed: DataFeed):
-        self._data_feeds[data_feed.get_name()] = data_feed
-        logger.info(f"data feed: {data_feed.get_name()} 注册")
+        self._data_feeds[data_feed.name] = data_feed
+        logger.info(f"data feed: {data_feed.name} 注册")
         support_topic = data_feed.supported_data_list()
         data_feed.subscribe(self._message_handler)
         for topic in support_topic:
@@ -95,7 +98,7 @@ class SingleNodeLivingTradingEngine(Engine):
             logger.info(f"data identify: {topic} 加入总线")
         if self._status == self.STATUS_RUNNING:
             await data_feed.start()
-            logger.info(f"data feed: {data_feed.get_name()} 启动")
+            logger.info(f"data feed: {data_feed.name} 启动")
 
     async def register_account(self, account: Account):
         acc_name = account.name

@@ -10,7 +10,7 @@ import pytest
 from loguru import logger
 
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
-from s2cpy.exchange.polymarket_api import GammaAPI
+from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
 from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest, \
@@ -23,7 +23,7 @@ async def test_list_markets():
         clob_token_ids=['69324317355037271422943965141382095011871956039434394956830818206664869608517'])
     cfg = get_global_config()
     setup_global_logging(cfg.log)
-    api = GammaAPI()
+    api = RestfulAPI()
     markets = await api.list_markets(request)
     for market in markets:
         logger.info(market)
@@ -43,7 +43,7 @@ async def test_public_search_api():
 
     # 使用 build() 工厂方法以避免 IDE 将 pydantic __init__ 误判为需要填写全部字段
     params = PublicSearchRequest.build(q="btc")
-    gamma_api = GammaAPI()
+    gamma_api = RestfulAPI()
     response = await gamma_api.public_search(params)
     if response.events is None:
         logger.error("事件为空")
@@ -62,6 +62,14 @@ async def test_public_search_api():
 
 
 @pytest.mark.manual
+async def test_mini_ticker():
+    token_id = "13915689317269078219168496739008737517740566192006337297676041270492637394586"
+    api = RestfulAPI()
+    mini_ticker = await api.mini_ticker(token_id)
+    logger.debug(f"test_mini_ticker:{mini_ticker}")
+
+
+@pytest.mark.manual
 async def test_post_orders():
     """
     用来测试做一个挂单，下单的测试。
@@ -74,7 +82,7 @@ async def test_post_orders():
     await account.start_sync(handler)
 
     market_slug = "will-bitcoin-hit-150k-by-june-30-2026"
-    gamma_api = GammaAPI()
+    gamma_api = RestfulAPI()
     market_request = MarketGetBySlugRequest.build(slug=market_slug)
     market = await gamma_api.get_market_by_slug(market_request)
     logger.info(f"market id: {market.id}, slug: {market.slug}")
@@ -92,7 +100,7 @@ async def test_post_orders():
         "size": 5,
         "side": Side.BUY
     }
-    account.create_order(USDC, **args)
+    account.create_order(**args)
     await asyncio.sleep(60 * 60)
 
     @pytest.mark.manual
@@ -102,7 +110,7 @@ async def test_post_orders():
         :return:
         """
         logger.debug(f"test_event_slug_to_series_id")
-        gamma_api = GammaAPI()
+        gamma_api = RestfulAPI()
         event_slug = "btc-updown-15m-1777468500"
         event_slug_request = EventGetBySlugRequest.build(slug=event_slug)
         event = await gamma_api.get_event_by_slug(event_slug_request)

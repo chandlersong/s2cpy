@@ -9,8 +9,6 @@ from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount, POLYMARKET_
 
 class PolyMarketRepeatDemoStrategy(Strategy):
 
-    def register_account(self, account_names: List[Account]):
-        pass
 
     def data_list(self) -> List[str]:
         market = self.domain_key

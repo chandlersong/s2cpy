@@ -108,8 +108,8 @@ class DataFeed(Protocol):
         """
         pass
 
-    @abc.abstractmethod
-    def get_name(self) -> str:
+    @property
+    def name(self) -> str:
         """
         提供dataFeed的名字，方便后续的管理
         :return:
@@ -190,17 +190,14 @@ class Strategy(Protocol):
     def on_history_change(self, data: Data):
         pass
 
-    @abc.abstractmethod
-    def get_name(self):
-        pass
+    @property
+    def name(self):
+        raise NotImplementedError("策略的name方法为实现")
 
-    @abc.abstractmethod
-    def register_account(self, account_names: List[Account]):
+    async def start(self):
         """
-        #FUTURE
-        1. 支持策略多账户。一个策略可以支持多个账户。
-        2. 账户并不与具体交易所绑定。比如说我在binance上面看到了BTC的变动，我应该可以马上在polymarket这类下单。这点没有完全想好。
-        :param account_names: None的话，就是默认账户。这个先是placeholder吧。主要account体系没有想好。
+        一些策略开始运行时候的初始化方法，并不是每个策略都需要。
+        同时因为一些异步方法，需要从这里来调用
         :return:
         """
         pass

@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any, List, Optional
 
@@ -628,6 +629,9 @@ def parse_positions_response(data: Any) -> PositionsResponse:
     保持与其他 parse_*_response 助手一致的行为：接受 dict 或包含 data 包装的形式。
     """
     return PositionsResponse.from_api_response(data)
+
+def parse_to_json(data: Any) -> dict:
+    return data
 
 
 # ---------------------------------------------------------------------------

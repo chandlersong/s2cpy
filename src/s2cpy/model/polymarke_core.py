@@ -4,7 +4,7 @@ from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType, Par
     OrderType, SignatureTypeV2, OrderPayload
 from py_clob_client_v2.constants import POLYGON
 
-from s2cpy.exchange.polymarket_api import GammaAPI
+from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
@@ -206,7 +206,7 @@ class PolyMarketMarketMakerAccount(Account):
             self._open_orders[id_] = order
 
     async def _query_positions(self):
-        gramma_api = GammaAPI()
+        gramma_api = RestfulAPI()
         acc_config = self._config
         response = await gramma_api.positions(acc_config.funder_address)
         positions = response.positions

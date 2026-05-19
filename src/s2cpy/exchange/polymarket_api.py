@@ -30,13 +30,14 @@ from s2cpy.model.polymarket_io import (
     MarketGetBySlugRequest,
     MarketGetByIdRequest,
     PositionsResponse,
-    parse_positions_response, parse_market_response, ListMarketsRequest,
+    parse_positions_response, parse_market_response, ListMarketsRequest, parse_to_json,
 )
 
 
-class GammaAPI:
+class RestfulAPI:
     BASE_URL = "https://gamma-api.polymarket.com"
     DATA_URL = "https://data-api.polymarket.com"
+    CLOB_URL = "https://clob.polymarket.com"
 
     def __init__(self):
         """初始化 GammaAPI 客户端。
@@ -87,7 +88,7 @@ class GammaAPI:
     @retry(stop=stop_after_attempt(5),
            wait=wait_random(min=timedelta(milliseconds=100), max=timedelta(milliseconds=200)))
     async def public_search(self, request: PublicSearchRequest, timeout: float = 30) -> PublicSearchResponse:
-        url = f"{GammaAPI.BASE_URL}/public-search"
+        url = f"{RestfulAPI.BASE_URL}/public-search"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
         # Pass the Pydantic model class directly so get_and_parse can
@@ -102,7 +103,7 @@ class GammaAPI:
         used judiciously (e.g., caching results if doing multiple lookups).
         """
 
-        url = f"{GammaAPI.BASE_URL}/markets"
+        url = f"{RestfulAPI.BASE_URL}/markets"
         params = request.model_dump(exclude_none=True)
         # Use the helper parser which accepts arrays, wrapped {data: [...]},
         # or single-market payloads and returns either Market or list[Market].
@@ -120,35 +121,35 @@ class GammaAPI:
 
         Raises PolymarketNotFoundError on 404, PolymarketServerError on 5xx.
         """
-        url = f"{GammaAPI.BASE_URL}/{f"series/{request.id}".lstrip('/')}"
+        url = f"{RestfulAPI.BASE_URL}/{f"series/{request.id}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
         return await self.get_and_parse(url, Series, params=params, timeout=timeout)
 
     async def get_event_by_slug(self, request: EventGetBySlugRequest, timeout: float = 30) -> Event:
         """GET /events/{slug} -> Event"""
-        url = f"{GammaAPI.BASE_URL}/{f"events/slug/{request.slug}".lstrip('/')}"
+        url = f"{RestfulAPI.BASE_URL}/{f"events/slug/{request.slug}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("slug", None)
         return await self.get_and_parse(url, Event, params=params, timeout=timeout)
 
     async def get_market_by_slug(self, request: MarketGetBySlugRequest, timeout: float = 30) -> "Market":
         """GET /markets/{slug} -> Market"""
-        url = f"{GammaAPI.BASE_URL}/{f"markets/slug/{request.slug}".lstrip('/')}"
+        url = f"{RestfulAPI.BASE_URL}/{f"markets/slug/{request.slug}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("slug", None)
         return await self.get_and_parse(url, Market, params=params, timeout=timeout)
 
     async def get_market_by_id(self, request: MarketGetByIdRequest, timeout: float = 30) -> "Market":
         """GET /markets/{id} -> Market"""
-        url = f"{GammaAPI.BASE_URL}/{f"markets/{request.id}".lstrip('/')}"
+        url = f"{RestfulAPI.BASE_URL}/{f"markets/{request.id}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
         return await self.get_and_parse(url, Market, params=params, timeout=timeout)
 
     async def get_event_by_id(self, request: EventGetByIdRequest, timeout: float = 30) -> "Event":
         """GET /events/{id} -> Event"""
-        url = f"{GammaAPI.BASE_URL}/{f"events/{request.id}".lstrip('/')}"
+        url = f"{RestfulAPI.BASE_URL}/{f"events/{request.id}".lstrip('/')}"
         params = request.model_dump(exclude_none=True)
         params.pop("id", None)
         return await self.get_and_parse(url, Event, params=params, timeout=timeout)
@@ -167,6 +168,22 @@ class GammaAPI:
         params = {k: v for k, v in params.items() if v is not None}
         # Use parse_positions_response helper so we can accept array or wrapped formats
         return await self.get_and_parse(url, parse_positions_response, params=params, timeout=timeout)
+
+    async def mini_ticker(self, token_id,
+                          timeout: float = 30) -> float:
+        """GET https://data-api.polymarket.com/positions
+
+        Only exposes the following query parameters to callers: `user`, `sizeThreshold`, `limit`, `offset`.
+        Returns a `PositionsResponse` parsed from the response. Raises existing Polymarket* errors on non-200.
+        """
+        url = f"{self.CLOB_URL}/tick-size"
+        params = {"token_id": token_id}
+        # remove None values
+        params = {k: v for k, v in params.items() if v is not None}
+        # Use parse_positions_response helper so we can accept array or wrapped formats
+        response: dict = await self.get_and_parse(url, parse_to_json, params=params, timeout=timeout)
+        value: str = response['minimum_tick_size']
+        return float(value)
 
 
 # -----------------
@@ -195,4 +212,4 @@ async def _noop_retry_wrapper():
     return None
 
 
-__all__ = ["GammaAPI", "PolymarketAPIError", "PolymarketNotFoundError", "PolymarketServerError"]
+__all__ = ["RestfulAPI", "PolymarketAPIError", "PolymarketNotFoundError", "PolymarketServerError"]
