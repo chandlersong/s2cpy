@@ -30,5 +30,5 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 # 使用 uv 启动（推荐）
-ENTRYPOINT ["uv", "run", "--no-sync"]
+ENTRYPOINT ["python"]
 CMD ["main.py"]

@@ -9,7 +9,7 @@ import signal
 from loguru import logger
 from s2cpy.strategy.glft_market_strategy import PolyMarketGLFTStrategy
 from s2cpy.core.engine import SingleNodeLivingTradingEngine
-from s2cpy.data_feeds.ploymarket_feed import OneMarketDataFeed
+from s2cpy.data_feeds.ploymarket_feed import OneMarketDataFeed, CryptoRepeatDataFeed
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
 from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
 
@@ -35,11 +35,11 @@ async def main():
     # 连接账户
     account = PolyMarketMarketMakerAccount(polymarket_account)
     await engine.register_account(account)
-    market_slug = "bitcoin-up-or-down-may-20-2026-2am-et"
-    one_market_data_feed = OneMarketDataFeed(market_slug)
+
+    one_market_data_feed = CryptoRepeatDataFeed()
     await engine.register_data_feed(one_market_data_feed)
 
-    glft_strategy = PolyMarketGLFTStrategy(account, market_slug)
+    glft_strategy = PolyMarketGLFTStrategy(account, one_market_data_feed.domain_key)
     await engine.register_strategy(glft_strategy)
 
     engine_task = asyncio.create_task(engine.start())

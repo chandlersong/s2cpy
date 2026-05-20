@@ -30,12 +30,10 @@ class CryptoRepeatDataFeed(DataFeed):
         key = self.domain_key
         return [
             f"{key}.book",
-            f"{key}.price_change",
+            # f"{key}.price_change",
             f"{key}.tick_size_change",
             f"{key}.last_trade_price",
             f"{key}.best_bid_ask",
-            f"{key}.new_market",
-            f"{key}.market_resolved",
         ]
 
     async def start(self):
