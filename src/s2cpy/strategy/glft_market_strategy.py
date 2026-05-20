@@ -42,7 +42,7 @@ class PolyMarketGLFTStrategy(Strategy):
         return self._market_slug
 
     def on_change(self, data: WebsocketData):
-        logger.info(f"strategy {self.name} receive: {data}")
+        # logger.info(f"strategy {self.name} receive: {data}")
         topic = data.topic
         if topic == self._best_ask_bid_topic:
             best_bid = data.data['best_bid']
