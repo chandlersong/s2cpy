@@ -3,6 +3,8 @@
 """
 import asyncio
 import dataclasses
+import math
+from collections import deque
 
 import numpy as np
 
@@ -40,6 +42,8 @@ class RollingGLFT:
         self._k = None
         self._a = None
 
+        self._mid_prices = deque(maxlen=window_period_seconds // update_cycle_seconds)
+
     @property
     def k(self):
         return self._k
@@ -54,8 +58,48 @@ class RollingGLFT:
     def append_order_books(self, timestamp: int, mid_price: float):
         self._last_orderbook = _GLFTOrderBook(timestamp, mid_price)
 
+    def calculate_volatility(self):
+        """计算波动率"""
+        if len(self._mid_prices) < self._window_period_seconds // self._update_cycle_seconds:
+            return np.nan
+        window = self._window_period_seconds / 3600
+        mid_prices = np.array(self._mid_prices)
+        log_ret = np.log(mid_prices[1:] / mid_prices[:-1])
+        vol = np.std(log_ret[-window:]) * np.sqrt(3600)
+        return max(vol, 0.01)
+
+    def glft_calculate(self,
+                       q: float,
+                       gamma: float = 0.05,
+                       delta: float = 1.0):
+        """GLFT核心公式计算"""
+        vol = self.calculate_volatility()
+        if vol < 1e-8:
+            vol = 0.01
+
+        # c1
+        temp = 1.0 + (gamma * delta / self._k)
+        c1 = (1.0 / (gamma * delta)) * math.log(temp)
+
+        # c2
+        exponent = (self._k / (gamma * delta)) + 1.0
+        inner = (gamma / (2.0 * self._a * delta * self._k)) * (temp ** exponent)
+        c2 = math.sqrt(inner)
+
+        # half_spread 和 skew
+        half_spread = c1 + (delta / 2.0) * c2 * vol
+        skew = c2 * vol
+
+        # 最终报价
+        reservation_price = self._k - skew * q
+        bid_price = reservation_price - half_spread
+        ask_price = reservation_price + half_spread
+
+        return bid_price, ask_price
+
     async def _run_periodic(self):
         try:
+            self._mid_prices.append(self._last_orderbook.mid_price)
             lambdas = dict()
             while True:
                 try:
@@ -91,7 +135,7 @@ class RollingGLFT:
             self._k = None
             return lambdas
 
-        result = linregress(self._depths[mask],np.log(hits_mean[mask]))
+        result = linregress(self._depths[mask], np.log(hits_mean[mask]))
         k = -result.slope
         a = np.exp(result.intercept)
         self._a = a
