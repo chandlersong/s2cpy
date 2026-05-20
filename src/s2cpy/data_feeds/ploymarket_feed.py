@@ -14,7 +14,7 @@ class CryptoRepeatDataFeed(DataFeed):
     """
     主要是代表那些BTC，一段时间内猜涨跌的数据连接
     """
-
+    EVENT_LIST = ["book", "tick_size_change", "last_trade_price", "best_bid_ask"]
     def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
         self._coin_name = coin_name
         self._interval = interval
@@ -104,7 +104,8 @@ class CryptoRepeatDataFeed(DataFeed):
     def _on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
         key = self.domain_key
-        self._handler(f"{key}.{event_type}", data)
+        if event_type in self.EVENT_LIST:
+            self._handler(f"{key}.{event_type}", data)
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:
         logger.info(f"PolyMarket:Getting last market from {self.current_slug}")
