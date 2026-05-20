@@ -60,7 +60,7 @@ class RollingGLFT:
 
     def calculate_volatility(self):
         """计算波动率"""
-        if len(self._mid_prices) < self._window_period_seconds // self._update_cycle_seconds:
+        if len(self._mid_prices) < (self._window_period_seconds // self._update_cycle_seconds):
             return np.nan
         window = self._window_period_seconds / 3600
         mid_prices = np.array(self._mid_prices)
