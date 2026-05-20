@@ -45,16 +45,16 @@ class PolyMarketGLFTStrategy(Strategy):
         # logger.info(f"strategy {self.name} receive: {data}")
         topic = data.topic
         if topic == self._best_ask_bid_topic:
-            best_bid = data.data['best_bid']
-            best_ask = data.data['best_ask']
+            best_bid = float(data.data['best_bid'])
+            best_ask = float(data.data['best_ask'])
             mid_price = (best_bid + best_ask) / 2
-            timestamp = data.data['timestamp']
+            timestamp = int(data.data['timestamp'])
             self._glft.append_order_books(timestamp // 1000, mid_price)
             self._yes_token = None
             self._no_token = None
         elif topic == self._trade_topic:
-            trade_price = data.data['price']
-            timestamp = data.data['timestamp'] // 1000
+            trade_price = float(data.data['price'])
+            timestamp = int(data.data['timestamp']) // 1000
             quantity = data.data['size']
             side = 1 if data.data['side'] == 'BUY' else -1
             self._glft.append_trades(timestamp, trade_price, quantity, side)
