@@ -26,7 +26,7 @@ from typing import Dict, Any, List, Optional
 
 from blinker import Namespace, NamedSignal
 
-from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account
+from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, WebsocketData
 from loguru import logger
 
 
@@ -115,6 +115,6 @@ class SingleNodeLivingTradingEngine(Engine):
     def _message_handler(self, topic: str, data: Any):
         signal = self._signals.get(topic)
         if signal:
-            signal.send(data)
+            signal.send(WebsocketData(topic, data))
         else:
             logger.warning(f"没有找到topic: {topic} 的信号，消息被丢弃")

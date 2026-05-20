@@ -35,7 +35,7 @@ async def main():
     # 连接账户
     account = PolyMarketMarketMakerAccount(polymarket_account)
     await engine.register_account(account)
-    market_slug = "bitcoin-up-or-down-may-19-2026-2am-et"
+    market_slug = "bitcoin-up-or-down-may-20-2026-2am-et"
     one_market_data_feed = OneMarketDataFeed(market_slug)
     await engine.register_data_feed(one_market_data_feed)
 

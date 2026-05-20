@@ -1,9 +1,11 @@
-from typing import List
+import asyncio
+from typing import List, Any
 from loguru import logger
 
+from s2cpy.algorithms.glfts import RollingGLFT
 from s2cpy.data_feeds.ploymarket_feed import OneMarketDataFeed
 from s2cpy.exchange.polymarket_api import RestfulAPI
-from s2cpy.model.core_model import Strategy, Data
+from s2cpy.model.core_model import Strategy, WebsocketData
 from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
 from s2cpy.model.polymarket_io import MarketGetBySlugRequest
 
@@ -15,6 +17,10 @@ class PolyMarketGLFTStrategy(Strategy):
         self._account = account
         self._yes_token = None
         self._no_token = None
+        self._glft = RollingGLFT()
+        self._best_ask_bid_topic = f"{self.name}.best_bid_ask"
+        self._trade_topic = f"{self.name}.last_trade_price"
+        self._task = asyncio.create_task(self._run_periodic())
 
     def data_list(self) -> List[str]:
         key = self.name
@@ -35,7 +41,39 @@ class PolyMarketGLFTStrategy(Strategy):
     def name(self):
         return self._market_slug
 
-    def on_change(self, data: Data):
+    def on_change(self, data: WebsocketData):
         logger.info(f"strategy {self.name} receive: {data}")
+        topic = data.topic
+        if topic == self._best_ask_bid_topic:
+            best_bid = data.data['best_bid']
+            best_ask = data.data['best_ask']
+            mid_price = (best_bid + best_ask) / 2
+            timestamp = data.data['timestamp']
+            self._glft.append_order_books(timestamp // 1000, mid_price)
+            self._yes_token = None
+            self._no_token = None
+        elif topic == self._trade_topic:
+            trade_price = data.data['price']
+            timestamp = data.data['timestamp'] // 1000
+            quantity = data.data['size']
+            side = 1 if data.data['side'] == 'BUY' else -1
+            self._glft.append_trades(timestamp, trade_price, quantity, side)
 
+    async def _run_periodic(self):
+        """
+        为了测试以后删掉
+        :return:
+        """
 
+        try:
+            while True:
+                try:
+                    ask, bid = self._glft.glft_calculate(q=5)
+                    logger.info(f"ask: {ask}, bid: {bid}")
+                except Exception as e:
+                    logger.error(e)
+                # do work
+                await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            # 清理
+            raise

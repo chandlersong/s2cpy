@@ -67,12 +67,11 @@ class OrderInfo:
 
 
 @dataclasses.dataclass
-class Data:
+class WebsocketData:
     """
     表示具体的数据
     """
-    asset: Asset
-    asset_type: str
+    topic: str
     data: Any
 
 
@@ -179,7 +178,7 @@ class Strategy(Protocol):
         """
         pass
 
-    def on_change(self, data: Data):
+    def on_change(self, data: Any):
         """
         当外部数据任何变化时，被调用
         :param data:
@@ -187,7 +186,7 @@ class Strategy(Protocol):
         """
         pass
 
-    def on_history_change(self, data: Data):
+    def on_history_change(self, data: WebsocketData):
         pass
 
     @property

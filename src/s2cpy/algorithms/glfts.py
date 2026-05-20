@@ -74,6 +74,8 @@ class RollingGLFT:
                        delta: float = 1.0):
         """GLFT核心公式计算"""
         vol = self.calculate_volatility()
+        if np.isnan(vol):
+            return None, None
         if vol < 1e-8:
             vol = 0.01
 
