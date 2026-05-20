@@ -36,7 +36,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/s2cpy:${{ inputs.tag }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/s2cpy:latest
+            chandlersong/s2cpy:${{ inputs.tag }}
+            chandlersong/s2cpy:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
