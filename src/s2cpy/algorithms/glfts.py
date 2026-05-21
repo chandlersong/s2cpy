@@ -82,7 +82,7 @@ class RollingGLFT:
         if vol < 1e-8:
             vol = 0.01
         if self._k < 0:
-            k = self._mid_prices[-1].mid_price
+            k = self._mid_prices[-1]
             logger.info(f"k:{self._k}，噪音太多")
         else:
             k = self._k
@@ -113,7 +113,7 @@ class RollingGLFT:
                 lambdas = dict()
                 while True:
                     try:
-                        self._mid_prices.append(self._last_orderbook)
+                        self._mid_prices.append(self._last_orderbook.mid_price)
                         lambdas = self.calibrate_a_k(lambdas)
                     except Exception as e:
                         logger.error(e)
@@ -159,8 +159,8 @@ class RollingGLFT:
 
     def count_hits(self):
         mid = self._last_orderbook.mid_price
-        trades = self._trades
-        self._trades = []
+        trades = self._trades.copy()
+        self._trades.clear()
         if len(trades) == 0:
             return None
         hits = np.zeros_like(self._depths)
