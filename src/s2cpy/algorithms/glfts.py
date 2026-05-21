@@ -140,7 +140,8 @@ class RollingGLFT:
         records_num = self._window_period_seconds / self._update_cycle_seconds
         hits_mean = np.array(list(lambdas.values())).sum(axis=0) / records_num
 
-        mask = (hits_mean > 1e-8) & (np.arange(len(hits_mean)) >= 1)
+        # mask = (hits_mean > 1e-8) & (np.arange(len(hits_mean)) >= 1)
+        mask = (hits_mean > 1e-8)
         if np.sum(mask) < 5:
             logger.info(
                 f"数据太少了，无法计算a和k，继续等待数据,lambda数据{len(lambdas)}.mask长度{np.sum(mask)}.records_num{records_num}")
