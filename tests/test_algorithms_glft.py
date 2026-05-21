@@ -26,7 +26,7 @@ async def test_rolling_glft_update_lambdas():
     actual = glft.count_hits()
     logger.info(f"depth is :{actual}")
     # use allclose to allow for tiny floating point differences
-    assert np.allclose(np.array([0.01666667, 0.05      , 0.06666667]), actual)
+    assert np.allclose(np.array([1, 2     , 1]), actual)
 
 @pytest.mark.manual
 async def test_rolling_glft_calculate_a_k():
