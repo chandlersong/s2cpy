@@ -81,14 +81,18 @@ class RollingGLFT:
             return None, None
         if vol < 1e-8:
             vol = 0.01
-
+        if self._k < 0:
+            k = self._mid_prices[-1].mid_price
+            logger.info(f"k:{self._k}，噪音太多")
+        else:
+            k = self._k
         # c1
-        temp = 1.0 + (gamma * delta / self._k)
+        temp = 1.0 + (gamma * delta / k)
         c1 = (1.0 / (gamma * delta)) * math.log(temp)
 
         # c2
-        exponent = (self._k / (gamma * delta)) + 1.0
-        inner = (gamma / (2.0 * self._a * delta * self._k)) * (temp ** exponent)
+        exponent = (k / (gamma * delta)) + 1.0
+        inner = (gamma / (2.0 * self._a * delta * k)) * (temp ** exponent)
         c2 = math.sqrt(inner)
 
         # half_spread 和 skew
@@ -96,7 +100,7 @@ class RollingGLFT:
         skew = c2 * vol
 
         # 最终报价
-        reservation_price = self._k - skew * q
+        reservation_price = k - skew * q
         bid_price = reservation_price - half_spread
         ask_price = reservation_price + half_spread
 
@@ -125,6 +129,7 @@ class RollingGLFT:
         hits = self.count_hits()
         if hits is None:
             return lambdas
+        logger.info(f"latest hits:{list(hits)}")
         lambdas[self._last_orderbook.timestamp] = hits
         valid_timestamp = get_unix_seconds_utc() - self._window_period_seconds
         # 删除所有的lambdas的key小于valid_timestamp的数据。
@@ -134,7 +139,6 @@ class RollingGLFT:
             return lambdas
         records_num = self._window_period_seconds / self._update_cycle_seconds
         hits_mean = np.array(list(lambdas.values())).sum(axis=0) / records_num
-
 
         mask = (hits_mean > 1e-8) & (np.arange(len(hits_mean)) >= 1)
         if np.sum(mask) < 5:
