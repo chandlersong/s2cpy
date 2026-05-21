@@ -105,10 +105,11 @@ class RollingGLFT:
     async def _run_periodic(self):
         while True:
             try:
-                self._mid_prices.append(self._last_orderbook.mid_price)
+
                 lambdas = dict()
                 while True:
                     try:
+                        self._mid_prices.append(self._last_orderbook.mid_price)
                         lambdas = self.calibrate_a_k(lambdas)
                     except Exception as e:
                         logger.error(e)
