@@ -129,7 +129,7 @@ class RollingGLFT:
         hits = self.count_hits()
         if hits is None:
             return lambdas
-        logger.info(f"latest hits:{list(hits)}")
+        logger.info(f"latest hits:{hits}")
         lambdas[self._last_orderbook.timestamp] = hits
         valid_timestamp = get_unix_seconds_utc() - self._window_period_seconds
         # 删除所有的lambdas的key小于valid_timestamp的数据。
@@ -139,7 +139,7 @@ class RollingGLFT:
             return lambdas
         records_num = self._window_period_seconds / self._update_cycle_seconds
         hits_mean = np.array(list(lambdas.values())).sum(axis=0) / records_num
-
+        logger.info(f"hits_mean:{hits_mean}")
         # mask = (hits_mean > 1e-8) & (np.arange(len(hits_mean)) >= 1)
         mask = (hits_mean > 1e-8)
         if np.sum(mask) < 5:
