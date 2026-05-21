@@ -17,7 +17,7 @@ class PolyMarketGLFTStrategy(Strategy):
         self._account = account
         self._yes_token = None
         self._no_token = None
-        self._glft = RollingGLFT(window_period_seconds=5 * 60, update_cycle_seconds=10)
+        self._glft = RollingGLFT(window_period_seconds=60, update_cycle_seconds=10)
         self._best_ask_bid_topic = f"{self.name}.best_bid_ask"
         self._trade_topic = f"{self.name}.last_trade_price"
         self._task = asyncio.create_task(self._run_periodic())
@@ -73,7 +73,7 @@ class PolyMarketGLFTStrategy(Strategy):
                 except Exception as e:
                     logger.error(e)
                 # do work
-                await asyncio.sleep(60)
+                await asyncio.sleep(10)
         except asyncio.CancelledError:
             # 清理
             raise

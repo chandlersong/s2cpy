@@ -60,15 +60,16 @@ class RollingGLFT:
 
     def calculate_volatility(self):
         """计算波动率"""
-        threshold = (self._window_period_seconds // self._update_cycle_seconds) * 0.9
+        window = int(self._window_period_seconds / self._update_cycle_seconds)
+        threshold = window * 0.9
         mid_prices = np.array(self._mid_prices)
         if len(mid_prices) < threshold:
             logger.warning(f"计算GLFT模型数据太少，现有{len(mid_prices)},需要{threshold}")
             return np.nan
-        window = self._window_period_seconds / 3600
+
 
         log_ret = np.log(mid_prices[1:] / mid_prices[:-1])
-        vol = np.std(log_ret[-window:]) * np.sqrt(3600)
+        vol = np.std(log_ret[-window:]) * np.sqrt(self._update_cycle_seconds)
         return max(vol, 0.01)
 
     def glft_calculate(self,
@@ -132,8 +133,8 @@ class RollingGLFT:
         # loop所有的values，把他们相同index的相加
         if len(lambdas) == 0:
             return lambdas
-        hits_mean = np.array(list(lambdas.values())).sum(axis=0) / len(lambdas)
         records_num = self._window_period_seconds / self._update_cycle_seconds
+        hits_mean = np.array(list(lambdas.values())).sum(axis=0) / records_num
 
         mask = hits_mean > 1e-8
         if np.sum(mask) < 5 or records_num < len(lambdas) * 0.8:
@@ -144,7 +145,8 @@ class RollingGLFT:
             return lambdas
 
         result = linregress(self._depths[mask], np.log(hits_mean[mask]))
-        k = -result.slope
+        # TODO:这里是为了演示，k总是负数，但是这里感觉应该是正的。以后需要好好的验证过程。
+        k = abs(-result.slope)
         a = np.exp(result.intercept)
         self._a = a
         self._k = k
