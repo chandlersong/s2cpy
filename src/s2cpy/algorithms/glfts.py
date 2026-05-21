@@ -61,11 +61,12 @@ class RollingGLFT:
     def calculate_volatility(self):
         """计算波动率"""
         threshold = (self._window_period_seconds // self._update_cycle_seconds) * 0.9
-        if len(self._mid_prices) < threshold:
-            logger.warning(f"计算GLFT模型数据太少，现有{len(self._mid_prices)},需要{threshold}")
+        mid_prices = np.array(self._mid_prices)
+        if len(mid_prices) < threshold:
+            logger.warning(f"计算GLFT模型数据太少，现有{len(mid_prices)},需要{threshold}")
             return np.nan
         window = self._window_period_seconds / 3600
-        mid_prices = np.array(self._mid_prices)
+
         log_ret = np.log(mid_prices[1:] / mid_prices[:-1])
         vol = np.std(log_ret[-window:]) * np.sqrt(3600)
         return max(vol, 0.01)
@@ -102,20 +103,22 @@ class RollingGLFT:
         return bid_price, ask_price
 
     async def _run_periodic(self):
-        try:
-            self._mid_prices.append(self._last_orderbook.mid_price)
-            lambdas = dict()
-            while True:
-                try:
-                    lambdas = self.calibrate_a_k(lambdas)
-                except Exception as e:
-                    logger.error(e)
+        while True:
+            try:
+                self._mid_prices.append(self._last_orderbook.mid_price)
+                lambdas = dict()
+                while True:
+                    try:
+                        lambdas = self.calibrate_a_k(lambdas)
+                    except Exception as e:
+                        logger.error(e)
 
-                # do work
+                    # do work
+                    await asyncio.sleep(self._update_cycle_seconds)
+            except Exception as e:
+                # 为了保证程序一定运行
+                logger.info(f"gifts loop error：{e}")
                 await asyncio.sleep(self._update_cycle_seconds)
-        except asyncio.CancelledError:
-            # 清理
-            raise
 
     def calibrate_a_k(self, lambdas: dict):
         hits = self.count_hits()
