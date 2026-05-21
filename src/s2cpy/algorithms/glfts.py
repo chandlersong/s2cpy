@@ -113,7 +113,7 @@ class RollingGLFT:
                 lambdas = dict()
                 while True:
                     try:
-                        self._mid_prices.append(self._last_orderbook.mid_price)
+                        self._mid_prices.append(self._last_orderbook)
                         lambdas = self.calibrate_a_k(lambdas)
                     except Exception as e:
                         logger.error(e)
