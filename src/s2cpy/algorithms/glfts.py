@@ -5,6 +5,7 @@ import asyncio
 import dataclasses
 import math
 from collections import deque
+from typing import Optional
 
 import numpy as np
 
@@ -34,14 +35,14 @@ class RollingGLFT:
         :param min_tick: 最小的周期
         """
         self._depths = generate_depths_from_min_tick(min_tick=min_tick, n_points=depth_size)
-        self._last_orderbook = None
+        self._last_orderbook: Optional[_GLFTOrderBook] = None
         self._window_period_seconds = window_period_seconds
         self._update_cycle_seconds = update_cycle_seconds
         self._trades = []
         self._task = asyncio.create_task(self._run_periodic())
-        self._k = None
-        self._a = None
-
+        self._k = 0.25
+        self._a = 0.55
+        self._position = 0
         self._mid_prices = deque(maxlen=window_period_seconds // update_cycle_seconds)
 
     @property
@@ -72,39 +73,56 @@ class RollingGLFT:
         return max(vol, 0.01)
 
     def glft_calculate(self,
-                       q: float,
-                       gamma: float = 0.05,
-                       delta: float = 1.0):
-        """GLFT核心公式计算"""
+                       p: float,
+                       gamma: float = 0.02,
+                       adj1=1.0, adj2=0.15, min_tick=0.01):
         vol = self.calculate_volatility()
-        if np.isnan(vol):
+        if vol is np.nan:
             return None, None
-        if vol < 1e-8:
-            vol = 0.01
-        if self._k < 0:
-            k = self._mid_prices[-1]
-            logger.info(f"k:{self._k}，噪音太多")
-        else:
-            k = self._k
-        # c1
-        temp = 1.0 + (gamma * delta / k)
-        c1 = (1.0 / (gamma * delta)) * math.log(temp)
+        half, skew = self.glft_half_spread_skew(
+            gamma, vol,
+            adj1=adj1, adj2=adj2
+        )
+        logger.info(f"half: {half}, skew: {skew}")
+        # reservation_price = mid - skew * position（库存倾斜）
+        mid_price = self._last_orderbook.mid_price if self._last_orderbook else None
+        if mid_price is None:
+            logger.info(f"GLFT模型在预热中")
+            return None, None
+        reservation = mid_price - skew * p
 
-        # c2
-        exponent = (k / (gamma * delta)) + 1.0
-        inner = (gamma / (2.0 * self._a * delta * k)) * (temp ** exponent)
-        c2 = math.sqrt(inner)
+        bid_price = reservation - half
+        ask_price = reservation + half
+        logger.info(f"bid_price:{bid_price}, ask_price:{ask_price},mid_price:{mid_price}")
+        # 防止越界（可选）
+        bid_price = max(bid_price, mid_price - half * 3)
+        ask_price = min(ask_price, mid_price + half * 3)
 
-        # half_spread 和 skew
-        half_spread = c1 + (delta / 2.0) * c2 * vol
-        skew = c2 * vol
+        return round(bid_price / min_tick) * min_tick, \
+               round(ask_price / min_tick) * min_tick
 
-        # 最终报价
-        reservation_price = k - skew * q
-        bid_price = reservation_price - half_spread
-        ask_price = reservation_price + half_spread
+    def compute_glft_coeffs(self, gamma, delta_param=1.0):
+        """计算 c1, c2"""
+        A = self.a
+        k = self.k
+        if A is None or k is None or A <= 0 or k <= 0:
+            logger.warning(f"A:{A}, k:{k}, delta_param:{delta_param}")
+            return 1.0, 0.1
+        inv_k = 1.0 / k
+        xi_delta = gamma * delta_param
+        term = 1 + xi_delta * inv_k
+        c1 = (1.0 / xi_delta) * np.log(term)
+        exponent = k / xi_delta + 1
+        inside = (gamma / (2 * A * delta_param * k)) * (term ** exponent)
+        c2 = np.sqrt(inside)
+        return c1, c2
 
-        return bid_price, ask_price
+    def glft_half_spread_skew(self, gamma, volatility, delta_param=1.0, adj1=1.0, adj2=0.5):
+        """返回 half_spread 和 skew（可加调整因子调保守程度）"""
+        c1, c2 = self.compute_glft_coeffs(gamma, delta_param)
+        half_spread = (c1 + (delta_param / 2) * c2 * volatility) * adj1
+        skew = c2 * volatility * adj2
+        return half_spread, skew
 
     async def _run_periodic(self):
         while True:
@@ -145,8 +163,8 @@ class RollingGLFT:
         if np.sum(mask) < 5:
             logger.info(
                 f"数据太少了，无法计算a和k，继续等待数据,lambda数据{len(lambdas)}.mask长度{np.sum(mask)}.records_num{records_num}")
-            self._a = None
-            self._k = None
+            self._k = 0.25
+            self._a = 0.55
             return lambdas
 
         result = linregress(self._depths[mask], np.log(hits_mean[mask]))
@@ -155,6 +173,7 @@ class RollingGLFT:
         a = np.exp(result.intercept)
         self._a = a
         self._k = k
+        logger.info(f"lastest k:{k}, a:{a}")
         return lambdas
 
     def count_hits(self):
