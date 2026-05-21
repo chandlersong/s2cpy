@@ -67,7 +67,6 @@ class RollingGLFT:
             logger.warning(f"计算GLFT模型数据太少，现有{len(mid_prices)},需要{threshold}")
             return np.nan
 
-
         log_ret = np.log(mid_prices[1:] / mid_prices[:-1])
         vol = np.std(log_ret[-window:]) * np.sqrt(self._update_cycle_seconds)
         return max(vol, 0.01)
@@ -136,8 +135,9 @@ class RollingGLFT:
         records_num = self._window_period_seconds / self._update_cycle_seconds
         hits_mean = np.array(list(lambdas.values())).sum(axis=0) / records_num
 
-        mask = hits_mean > 1e-8
-        if np.sum(mask) < 5 or records_num < len(lambdas) * 0.8:
+
+        mask = (hits_mean > 1e-8) & (np.arange(len(hits_mean)) >= 1)
+        if np.sum(mask) < 5:
             logger.info(
                 f"数据太少了，无法计算a和k，继续等待数据,lambda数据{len(lambdas)}.mask长度{np.sum(mask)}.records_num{records_num}")
             self._a = None
@@ -146,7 +146,7 @@ class RollingGLFT:
 
         result = linregress(self._depths[mask], np.log(hits_mean[mask]))
         # TODO:这里是为了演示，k总是负数，但是这里感觉应该是正的。以后需要好好的验证过程。
-        k = abs(-result.slope)
+        k = -result.slope
         a = np.exp(result.intercept)
         self._a = a
         self._k = k
@@ -159,11 +159,15 @@ class RollingGLFT:
         if len(trades) == 0:
             return None
         hits = np.zeros_like(self._depths)
+        prev_count_sum = 0
         for j, d in enumerate(self._depths):
             price_low = mid - d
             price_high = mid + d
             h = int(np.sum((trades >= price_low) & (trades <= price_high)))
-            hits[j] = h / self._update_cycle_seconds
+            temp = h
+            h = h - prev_count_sum
+            prev_count_sum = temp
+            hits[j] = h
         return hits
 
 
