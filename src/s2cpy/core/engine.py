@@ -114,6 +114,7 @@ class SingleNodeLivingTradingEngine(Engine):
 
     def _message_handler(self, topic: str, data: Any):
         signal = self._signals.get(topic)
+        # TODO: 统一的错误处理
         if signal:
             signal.send(WebsocketData(topic, data))
         else:
