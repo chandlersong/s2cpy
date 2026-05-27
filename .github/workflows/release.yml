@@ -16,6 +16,15 @@ jobs:
       - name: Checkout 代码
         uses: actions/checkout@v4
 
+      - name: 打包源码为 zip (zip file)
+        run: zip -r s2cpy-${{ inputs.tag }}.zip . -x ".git/*"
+
+      - name: 上传源码压缩包
+        uses: actions/upload-artifact@v4
+        with:
+          name: s2cpy-${{ inputs.tag }}
+          path: s2cpy-${{ inputs.tag }}.zip
+
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
 
