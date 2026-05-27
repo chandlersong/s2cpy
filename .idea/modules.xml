@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/s2cpy.iml" filepath="$PROJECT_DIR$/.idea/s2cpy.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/s2cpython.iml" filepath="$PROJECT_DIR$/.idea/s2cpython.iml" />
+    </modules>
+  </component>
+</project>
