@@ -1,95 +1,57 @@
-# AGENTS（供 AI 代码代理使用）
+# AGENTS: How to be productive in this repository
 
-本文件记录了 AI 代码代理在此仓库中立刻上手所需的简明、可执行信息。
+This file gives an AI coding agent a concise, practical orientation to the s2cpy codebase so you can be productive quickly.
 
-快速检查清单（给代理的要点）
-- 理解三个主要子系统：`infrastructure`（配置、HTTP 客户端、日志）、`exchange`（Polymarket Gamma API 客户端）和 `model`（Pydantic v2 的请求/响应模型）。
-- 修改运行时行为时优先查看 `/src/s2cpy/infrastructure/settings.py` 和 `/src/s2cpy/infrastructure/http_client.py`。
-- 新增 API 或编写测试时，优先使用 `/src/s2cpy/model/polymarket_io.py` 中的 Pydantic 模型，以及 `/src/s2cpy/exchange/polymarket_api.py` 中的 `GammaAPI` 客户端。
-- 默认 pytest 会排除标记为 `manual` 的测试（见 `pyproject.toml`），CI/本地测试使用的环境为 `untest`。
+- Quick architecture (big picture)
+  - Source root: /Users/chandlersong/quant/s2cpy/src/s2cpy
+  - Major components:
+    - core: /src/s2cpy/core/engine.py — orchestration, run-loop and engine-level logic. Responsibilities: process event loops, manage feed/strategy lifecycle, coordinate message routing and global state.
+    - data_feeds: /src/s2cpy/data_feeds/ploymarket_feed.py — ingest Polymarket feed messages. Responsibilities: adapt external feeds into internal events, perform validation/normalization, handle reconnection/backpressure.
+    - exchange: /src/s2cpy/exchange/* — REST/WS clients (polymarket_api.py, polymarket_ws.py). Responsibilities: API layer that talks to external trading services — place/cancel orders, query REST endpoints, maintain WS subscriptions, surface retries/rate-limits and ACK/response semantics. (交易所交互的 API 层)
+    - infrastructure: /src/s2cpy/infrastructure/* — async helpers, http client, settings loader. Responsibilities: shared primitives (http client, async utilities, time helpers), settings and environment loading, retry/backoff strategies and instrumentation.
+    - model: /src/s2cpy/model/* — domain models and IO translators (polymarket_io.py, polymarket_ws_io.py). Responsibilities: pydantic domain schemas, conversion between raw JSON and internal typed objects, serialization for persistence/REST.
+    - algorithms / strategy: algorithm implementations and strategies under /src/s2cpy/algorithms and /src/s2cpy/strategy. Responsibilities: encapsulate trading/decision logic, stateless algorithm modules and stateful strategy implementations that plug into the engine.
 
-仓库总体结构与核心职责（big picture）
-- `src/s2cpy/infrastructure`
-  - `settings.py`：全局配置加载器与单例。它会从 `config/` 目录按优先级合并多个 TOML 配置文件（例如 `config.toml`、`config.<ENV>.toml`、`secrets.toml`），并支持由环境变量 `CONFIG_PATH` 覆盖。使用 `get_global_config()` 获取进程级配置实例；在测试中可用 `reset_global_config()` 重新初始化。
-  - `http_client.py`：基于 `aiohttp.ClientSession` 的懒加载单例封装。通过 `await HttpClient.get_session()` 获取可复用会话；长期运行或测试结束时调用 `await HttpClient.close()` 清理。
+- Data flow / boundaries (typical path)
+  - External Polymarket WS/REST -> exchange/polymarket_ws.py or exchange/polymarket_api.py
+  - -> data_feeds/ploymarket_feed.py (adapter) -> model.polymarket_ws_io / polymarket_io (translate raw payloads -> domain objects)
+  - -> core/engine.py and strategy modules (decision logic) -> exchange (place orders, calls)
+  - Use these files as canonical examples when tracing flows: /src/s2cpy/exchange/polymarket_ws.py, /src/s2cpy/data_feeds/ploymarket_feed.py, /src/s2cpy/core/engine.py
 
-    - 另注：`settings.load_config()` 还支持通过环境变量 `LOG_FOLDER` 指定配置/日志的基目录（可用于替换 repo 内的 `config/` 目录），以及通过 `ENV` 选择 `config.<ENV>.toml` 文件（测试在 `pyproject.toml` 中将 `ENV=untest`）。
-- `src/s2cpy/model/polymarket_io.py`
-  - 包含对 `/public-search` 的请求（`PublicSearchRequest`）和响应（`PublicSearchResponse`）的 Pydantic v2 模型，以及 Market、Event、Series 等大量嵌套域模型。模型常用 `model_dump`、`model_validate`、`Field`、`field_validator` 等模式。
-  - 提供 `PublicSearchRequest.build(...)` 工厂方法，用于在 IDE 中避免 Pydantic 可选字段导致的误报（tests/示例广泛使用）。
+- Project-specific conventions to follow
+  - Packaging: pyproject.toml at project root defines dependencies and test config. See /Users/chandlersong/quant/s2cpy/pyproject.toml — tests run with pytest and pytest-asyncio.
+  - Typing: package ships type hints (py.typed in /src/s2cpy). Prefer typed APIs when available (pydantic models used in /src/s2cpy/model).
+  - Async-first: many modules are async (infrastructure/async_tools.py, exchange/polymarket_ws.py, infrastructure/http_client.py). Prefer async implementations and use asyncio-safe patterns.
+  - Config: TOML files in /Users/chandlersong/quant/s2cpy/config (*.toml). Settings loader: /src/s2cpy/infrastructure/settings.py — read these for environment-specific behavior.
+  - Tests: most tests live in /Users/chandlersong/quant/s2cpy/tests. Manual tests are marked with pytest marker "manual"; default addopts excludes them.
 
-  - 另外：该模块现在也包含用于单资源 GET 的请求模型（`SeriesGetRequest`, `EventGetBySlugRequest`, `EventGetByIdRequest`, `MarketGetBySlugRequest`, `MarketGetByIdRequest`）以及对应的解析助手（`parse_series_response`, `parse_event_response`, `parse_market_response`），供 `GammaAPI` 的资源获取方法复用。
-- `src/s2cpy/exchange/polymarket_api.py`
-  - `GammaAPI`：一个小型异步客户端，使用 `HttpClient.get_session()` 发起请求并用 Pydantic 模型解析响应（调用示例见 tests）。
-  - 提供的对外方法除了 `public_search` 外，还包含通用的 `get_and_parse(...)` 帮助器以及具体的资源获取方法：`get_series_by_id`, `get_event_by_slug`, `get_market_by_slug`, `get_market_by_id`, `get_event_by_id`。
-  - ��常行为：新增了客户端异常类 `PolymarketAPIError`（基类）、`PolymarketNotFoundError`（HTTP 404）和 `PolymarketServerError`（HTTP 5xx），这些在 `GammaAPI.get_and_parse` 中按 HTTP status 抛出以便上层处理。
-  - 重试与解析细节：`public_search` 使用 `tenacity.retry`（当前实现为最多 5 次尝试，wait_random 在 ~100-200ms 范围内）。响应解析优先使用 `PublicSearchResponse.from_api_response`（该方法兼容数组/`data` 包裹的返回），单资源方法复用 `polymarket_io` 中的 `parse_*_response` 系列解析器。
+- Developer workflows & commands
+  - Install deps & build: pyproject.toml uses uv_build (see [build-system] in pyproject.toml).
+  - Run tests: from project root run `pytest` (pyproject.toml provides defaults: -m "not manual"). For async tests pytest-asyncio is configured.
+  - Run example scripts: `python examples/single_server_live_example.py` or `python examples/GLFT_example.py` from repo root.
+  - Debugging: follow the message flow (WS -> data_feeds -> model -> engine) and add log calls (loguru is a dependency). The code uses blinker for eventing in places — search for blinker usage when tracing signals.
 
-重要的开发者工作流（命令与环境）
-- 运行单元测试（推荐）:
-  - 仓库在 `pyproject.toml` 中配置了 pytest（启用 async 测试，默认排除 `manual`）。在项目根目录运行：
+- Integration points and external deps
+  - Polymarket REST/WebSocket — adapters in /src/s2cpy/exchange (polymarket_api.py, polymarket_ws.py)
+  - py-clob-client-v2 is listed in pyproject.toml (line 17) — used for order placement or market IO
+  - Network code uses aiohttp (line 11)
 
-    PYTHONPATH=src pytest
+- Patterns and examples to copy
+  - Settings pattern: read /src/s2cpy/infrastructure/settings.py to see how Pydantic/Pydantic-Settings is used with config/*.toml.
+  - IO translation: /src/s2cpy/model/polymarket_ws_io.py and /src/s2cpy/model/polymarket_io.py show how raw JSON payloads map into domain models.
+  - Engine entrypoints: /src/s2cpy/core/engine.py demonstrates lifecycle and how feeds + strategies plug into the engine.
 
-  - 若要包含手工测试（标记 `@pytest.mark.manual`），运行：
+- What agents should do first (checklist)
+  1. Read /Users/chandlersong/quant/s2cpy/pyproject.toml to understand deps and test config.
+  2. Trace a message: open /src/s2cpy/exchange/polymarket_ws.py -> /src/s2cpy/data_feeds/ploymarket_feed.py -> /src/s2cpy/model/*.py -> /src/s2cpy/core/engine.py
+  3. Run `pytest -q` from repo root; skip manual tests if needed via markers (default already excludes manual).
+  4. Use examples in /Users/chandlersong/quant/s2cpy/examples to run live/demo flows.
 
-    PYTHONPATH=src pytest -m manual
+- Quick references
+  - pyproject: /Users/chandlersong/quant/s2cpy/pyproject.toml
+  - settings loader: /Users/chandlersong/quant/s2cpy/src/s2cpy/infrastructure/settings.py
+  - engine: /Users/chandlersong/quant/s2cpy/src/s2cpy/core/engine.py
+  - websocket adapter: /Users/chandlersong/quant/s2cpy/src/s2cpy/exchange/polymarket_ws.py
+  - feed adapter: /Users/chandlersong/quant/s2cpy/src/s2cpy/data_feeds/ploymarket_feed.py
 
-  - 可选：安装为可编辑包以获得类似已安装包的导入行为：
-
-    python -m pip install -e .
-    pytest
-
-- 配置与环境提示：
-  - 配置加载按优先级合并 `config/` 中的 TOML：`config.toml` <- `config.<ENV>.toml` <- `secrets.toml`。测试默认使用的 ENV 为 `untest`（见 `pyproject.toml` 的 env 配置）。
-  - 可通过设定 `CONFIG_PATH=/path/to/file.toml` 来覆盖要加载的配置文件。
-  - 日志通过 `setup_gobal_logging(config.log)` 初始化（参见 `tests/test_settings.py`），项目使用 `loguru`。
-
-项目特定约定与模式
-- Pydantic v2 的使用要点：
-  - 构造 GET 请求参数时使用 `.model_dump(exclude_none=True)`（见 `GammaAPI.public_search`）。
-  - 解析响应可使用 `.model_validate(...)` 或 `.parse_raw(...)`。`PublicSearchResponse.from_api_response` 已处理 API 常见的多种返回形态（直接数组、`data` 包裹、或包含命名键的对象）。
-- 单例与生命周期管理：
-  - `get_global_config()` 返回进程级 `AppSettings` 单例；测试需要改变配置时请调用 `reset_global_config()`。
-  - `HttpClient.get_session()` 是懒加载的 `aiohttp.ClientSession` 单例；在脚本退出或测试 teardown 时应调用 `await HttpClient.close()` 避免资源警告。
-- 测试标记约定：
-  - 手工/网络相关测试用 `@pytest.mark.manual` 标记，CI 与默认本地运行会排除此类测试。若变更涉及网络行为，请保留 `manual` 标签或用可控的 mock 替代真实请求。
-
-集成点与外部依赖
-- 外部 HTTP：Polymarket Gamma API（https://gamma-api.polymarket.com），由 `GammaAPI.public_search` 使用。
-- 配置驱动的网络行为：`AppSettings.proxy_url` 会注入到 `aiohttp.ClientSession` 的 `proxy` 字段（见 `http_client.py`），因此代理与网络相关设置通过 `config/*.toml` 控制。
-- 关键第三方库（见 `pyproject.toml`）：`aiohttp`、`loguru`、`pydantic`（v2）、`pydantic-settings`、`tenacity`。测试依赖 `pytest-asyncio`。
-
-可直接复用的代码示例（来自仓库）
-- 构造请求并调用 API（tests 中的模式）：
-
-  from s2cpy.model.polymarket_io import PublicSearchRequest
-  from s2cpy.exchange.polymarket_api import GammaAPI
-
-  params = PublicSearchRequest.build(q="btc")
-  gamma = GammaAPI()
-  resp = await gamma.public_search(params)
-
-- 获取全局配置并初始化日志（tests 示例）：
-
-  cfg = get_global_config()
-  setup_gobal_logging(cfg.log)
-
-代码中需注意的点（Notes & gotchas）
-- 配置加载器会打印所加载的文件并做深度合并；如果你只想依赖环境变量，请通过 `CONFIG_PATH` 指向一个单一文件以避免多文件合并干扰。
-- `PublicSearchResponse.from_api_response` 与 `PublicSearchRequest.build` 用于统一 API 的多种返回/构造习惯，优先使用这些 helper 而非手写 dict。
-- 本项目要求 Python >= 3.13（见 `pyproject.toml`），在执行或运行测试前请确保运行环境符合此要求。
-
-优先阅读的文件（建议顺序）
-- `src/s2cpy/infrastructure/settings.py`（配置与日志）
-- `src/s2cpy/infrastructure/http_client.py`（网络会话生命周期）
-- `src/s2cpy/model/polymarket_io.py`（域模型与响应解析）
-- `src/s2cpy/exchange/polymarket_api.py`（客户端调用示例）
-- `pyproject.toml`（测试运行配置、依赖、pytest 标记）
-
-如果你更改了网络行为或配置加载，请同时更新 `tests/`：优先添加可确定性的单元测试（对 `HttpClient.get_session()` 做 mock），而不是开启真实网络的手工测试。
-
----
-
-Generated on: 2026-05-01
-
+Keep this file short — use references above when you need more context.
