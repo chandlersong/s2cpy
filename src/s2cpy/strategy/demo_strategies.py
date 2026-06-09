@@ -1,7 +1,7 @@
 from typing import Dict, List
 
 from s2cpy.infrastructure.time import TimeInterval
-from s2cpy.model.core_model import Strategy, WebsocketData, Account
+from s2cpy.model.core_model import Strategy, LiveData, Account
 from loguru import logger
 
 from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount, POLYMARKET_ACCOUNT_TOPICS
@@ -45,5 +45,5 @@ class PolyMarketRepeatDemoStrategy(Strategy):
         interval = self._interval
         return f"{self._coin_name}-updown-{interval.to_str()}-{interval.get_close_now_second()}"
 
-    def on_change(self, data: WebsocketData):
+    def on_live_change(self, data: LiveData):
         logger.info(f"strategy {self.domain_key}: {data}")

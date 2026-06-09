@@ -164,8 +164,48 @@ class Market(BaseModel):
     lowerBound: Optional[str] = None
     upperBound: Optional[str] = None
     description: Optional[str] = None
-    outcomes: Optional[str] = None
-    outcomePrices: Optional[str] = None
+    outcomes: Optional[List[str]] = None
+    outcomePrices: Optional[List[float]] = None
+
+    @field_validator("outcomes", mode="before")
+    @classmethod
+    def _validate_outcomes(cls, v):
+        if isinstance(v, list):
+            return [str(x) for x in v]
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except Exception:
+                pass
+            if "," in s:
+                return [p.strip() for p in s.split(",") if p.strip()]
+            return [s]
+        return v
+
+    @field_validator("outcomePrices", mode="before")
+    @classmethod
+    def _validate_outcome_prices(cls, v):
+        if isinstance(v, list):
+            return [float(x) for x in v]
+        if isinstance(v, str):
+            s = v.strip()
+            if not s:
+                return None
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [float(x) for x in parsed]
+            except Exception:
+                pass
+            if "," in s:
+                return [float(p.strip()) for p in s.split(",") if p.strip()]
+            return [float(s)]
+        return v
     volume: Optional[str] = None
     active: Optional[bool] = None
     marketType: Optional[str] = None

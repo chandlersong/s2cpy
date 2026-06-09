@@ -26,7 +26,7 @@ from typing import Dict, Any, List, Optional
 
 from blinker import Namespace, NamedSignal
 
-from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, WebsocketData
+from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, LiveData
 from loguru import logger
 
 
@@ -67,7 +67,7 @@ class SingleNodeLivingTradingEngine(Engine):
         for topic in data_list:
             signal = self._signals.get(topic)
             if signal:
-                signal.connect(strategy.on_change)
+                signal.connect(strategy.on_live_change)
                 logger.info(f"策略: {strategy.name} 订阅了数据: {topic}")
             else:
                 logger.warning(f"没有找到数据: {topic} 的信号，策略: {strategy.name} 无法订阅")
@@ -112,10 +112,10 @@ class SingleNodeLivingTradingEngine(Engine):
             await account.start_sync(self._message_handler)
             logger.info(f"账户监听: {acc_name} 启动")
 
-    def _message_handler(self, topic: str, data: Any):
+    def _message_handler(self, topic: str, data: LiveData):
         signal = self._signals.get(topic)
         # TODO: 统一的错误处理
         if signal:
-            signal.send(WebsocketData(topic, data))
+            signal.send(data)
         else:
             logger.warning(f"没有找到topic: {topic} 的信号，消息被丢弃")

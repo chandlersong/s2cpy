@@ -5,7 +5,7 @@ from loguru import logger
 from s2cpy.algorithms.glfts import RollingGLFT
 from s2cpy.data_feeds.ploymarket_feed import OneMarketDataFeed
 from s2cpy.exchange.polymarket_api import RestfulAPI
-from s2cpy.model.core_model import Strategy, WebsocketData
+from s2cpy.model.core_model import Strategy, LiveData
 from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
 from s2cpy.model.polymarket_io import MarketGetBySlugRequest
 
@@ -41,7 +41,7 @@ class PolyMarketGLFTStrategy(Strategy):
     def name(self):
         return self._market_slug
 
-    def on_change(self, data: WebsocketData):
+    def on_live_change(self, data: LiveData):
         # logger.info(f"strategy {self.name} receive: {data}")
         topic = data.topic
         if topic == self._best_ask_bid_topic:

@@ -67,15 +67,16 @@ class OrderInfo:
 
 
 @dataclasses.dataclass
-class WebsocketData:
+class LiveData:
     """
     表示具体的数据
     """
     topic: str
+    asset: Asset
     data: Any
 
 
-DataHandler = Callable[[str, Any], Any]
+DataHandler = Callable[[str, LiveData], Any]
 
 
 class DataFeed(Protocol):
@@ -178,7 +179,7 @@ class Strategy(Protocol):
         """
         pass
 
-    def on_change(self, data: Any):
+    def on_live_change(self, data: LiveData):
         """
         当外部数据任何变化时，被调用
         :param data:
@@ -186,7 +187,12 @@ class Strategy(Protocol):
         """
         pass
 
-    def on_history_change(self, data: WebsocketData):
+    def on_history_change(self, data: Any):
+        """
+        FUTURE：以后实现，接收历史数据，一般在启动或者批量接收大批数据
+        :param data:
+        :return:
+        """
         pass
 
     @property

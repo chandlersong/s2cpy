@@ -3,9 +3,10 @@ from types import CoroutineType
 from typing import Any, Dict, Optional
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
+from s2cpy.exchange.polymarket_tools import convert_markets_2_assets
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc
-from s2cpy.model.core_model import DataFeed, DataHandler
+from s2cpy.model.core_model import DataFeed, DataHandler, Asset, LiveData
 from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest
 from loguru import logger
 
@@ -15,12 +16,14 @@ class CryptoRepeatDataFeed(DataFeed):
     主要是代表那些BTC，一段时间内猜涨跌的数据连接
     """
     EVENT_LIST = ["book", "tick_size_change", "last_trade_price", "best_bid_ask"]
+
     def __init__(self, coin_name="btc", interval: TimeInterval = TimeInterval.FifteenMinute):
         self._coin_name = coin_name
         self._interval = interval
         self._rotation_task: Optional[asyncio.Task] = None
         self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
             AttributeError(f"CryptoRepeatDataFeed-{coin_name}-{interval},handler没有设置, 请检查代码"))
+        self._asset: Dict[str, Asset] = dict()
 
     @property
     def name(self) -> str:
@@ -103,9 +106,13 @@ class CryptoRepeatDataFeed(DataFeed):
 
     def _on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
-        key = self.domain_key
         if event_type in self.EVENT_LIST:
-            self._handler(f"{key}.{event_type}", data)
+            key = self.domain_key
+            asset_id = data["asset_id"]
+            asset = self._asset[asset_id]
+            topic = f"{key}.{event_type}"
+            live_data = LiveData(topic=topic, asset=asset, data=data)
+            self._handler(topic, live_data)
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:
         logger.info(f"PolyMarket:Getting last market from {self.current_slug}")
@@ -120,6 +127,7 @@ class CryptoRepeatDataFeed(DataFeed):
         ws.register_handler("default", self._on_web_socket_message)
         await ws.connect()
         market = await self.get_last_market()
+        self._asset = convert_markets_2_assets(market)
         logger.info(f"WS connected to {url}")
         sub = {
             "assets_ids": market.clobTokenIds,
@@ -144,6 +152,7 @@ class OneMarketDataFeed(DataFeed):
             AttributeError(f"polymarket OneMarketDataFeed-{market_slug},handler没有设置, 请检查代码"))
         # Background rotation task (asyncio.Task) if started via start()
         self._rotation_task: Optional[asyncio.Task] = None
+        self._asset: Dict[str, Asset] = dict()
 
     @property
     def name(self) -> str:
@@ -217,9 +226,13 @@ class OneMarketDataFeed(DataFeed):
 
     def _on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
-        key = self.name
-        if event_type in  self.EVENT_LIST:
-            self._handler(f"{key}.{event_type}", data)
+        if event_type in self.EVENT_LIST:
+            key = self.name
+            asset_id = data["asset_id"]
+            asset = self._asset[asset_id]
+            topic = f"{key}.{event_type}"
+            live_data = LiveData(topic=topic, asset=asset, data=data)
+            self._handler(topic, live_data)
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:
         logger.info(f"PolyMarket:Getting last market from {self._market_slug}")
@@ -234,6 +247,7 @@ class OneMarketDataFeed(DataFeed):
         ws.register_handler("default", self._on_web_socket_message)
         await ws.connect()
         market = await self.get_last_market()
+        self._asset = convert_markets_2_assets(market)
         logger.info(f"WS connected to {url}")
         sub = {
             "assets_ids": market.clobTokenIds,
