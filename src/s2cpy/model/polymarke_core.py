@@ -1,4 +1,6 @@
 import collections
+import pickle
+from pathlib import Path
 
 from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType, PartialCreateOrderOptions, OrderArgs, Side, \
     OrderType, SignatureTypeV2, OrderPayload
@@ -8,7 +10,7 @@ from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
-from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
+from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds, get_unix_seconds_utc
 from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler
 
 import asyncio
@@ -286,6 +288,11 @@ class PolyMarketMarketMakerAccount(Account):
         :return:
         """
         trade_type = data["event_type"]
+        # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
+        export_folder = Path("/app/examples")
+        if export_folder.exists():
+            pickle.dump(data, open(export_folder/f'{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+
         if trade_type == "CONFIRMED":
             self._handler(self.get_topic("trade_confirm"), data)
         elif trade_type == "FAILED":
