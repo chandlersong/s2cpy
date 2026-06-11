@@ -35,6 +35,9 @@ class PolyMarketRelayerAccount(AccountBase):
     private_key: str = None
     funder_address: str = None
     deposit_wallet: str = None
+    builder_api: str = None
+    builder_secret: str = None
+    builder_pass_phrase: str = None
 
 
 # 兼容命名：保留原来的占位符名（如果外部引用了 AccountSettings ）

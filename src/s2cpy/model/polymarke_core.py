@@ -2,6 +2,11 @@ import collections
 import pickle
 from pathlib import Path
 
+from py_builder_relayer_client.client import RelayClient
+from py_builder_relayer_client.exceptions import RelayerClientException
+from py_builder_relayer_client.models import RelayerTxType
+from py_builder_signing_sdk.config import BuilderConfig
+from py_builder_signing_sdk.sdk_types import BuilderApiKeyCreds
 from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType, PartialCreateOrderOptions, OrderArgs, Side, \
     OrderType, SignatureTypeV2, OrderPayload
 from py_clob_client_v2.constants import POLYGON
@@ -21,7 +26,7 @@ from loguru import logger
 from s2cpy.model.polymarket_io import MarketGetBySlugRequest
 
 _CLOB_HOST = "https://clob.polymarket.com"
-
+_RELAYER_URL = "https://relayer-v2.polymarket.com"
 """
 # 业务定义
 主要是polymarket也一些基础的业务规则的定义。
@@ -63,7 +68,7 @@ class PolyMarketMarketMakerAccount(Account):
 
     """
 
-    def create_order(self,**kwargs) -> Optional[str]:
+    def create_order(self, **kwargs) -> Optional[str]:
         # TODO： 动态的获得这个ticker
         options = PartialCreateOrderOptions(
             tick_size="0.001"
@@ -109,6 +114,34 @@ class PolyMarketMarketMakerAccount(Account):
             funder=self._config.funder_address,
             signature_type=SignatureTypeV2.POLY_1271,  # POLY_1271 Deposit Wallet
         )
+        # builder_config = BuilderConfig(
+        #     local_builder_creds=BuilderApiKeyCreds(
+        #         key=os.getenv("POLY_BUILDER_API_KEY"),
+        #         secret=os.getenv("POLY_BUILDER_SECRET"),
+        #         passphrase=os.getenv("POLY_BUILDER_PASSPHRASE"),
+        #     )
+        # )
+        # self._relayer_client = RelayClient(
+        #     "https://relayer-v2.polymarket.com",
+        #     POLYGON,
+        #     self._config.private_key,
+        # )
+
+        builder_config = BuilderConfig(
+            local_builder_creds=BuilderApiKeyCreds(
+                key=config.builder_api,
+                secret=config.builder_secret,
+                passphrase=config.builder_pass_phrase,
+            )
+        )
+
+        self._relay_client = RelayClient(_RELAYER_URL, POLYGON, self._config.private_key, builder_config,
+                                         relay_tx_type=RelayerTxType.PROXY)
+        # try:
+        #     self._relay_client.deploy()
+        # except RelayerClientException as e:
+        #     # 偷懒的做法，因为第一次要做一次。以后写的简单点
+        #     pass
         self._api_creds = self._clob_client.create_or_derive_api_key()
         self._clob_client.set_api_creds(self._api_creds)
         self._usdc_balance: float = 0.0
@@ -291,7 +324,7 @@ class PolyMarketMarketMakerAccount(Account):
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
         export_folder = Path("/app/examples")
         if export_folder.exists():
-            pickle.dump(data, open(export_folder/f'{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+            pickle.dump(data, open(export_folder / f'{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
 
         if trade_type == "CONFIRMED":
             self._handler(self.get_topic("trade_confirm"), data)

@@ -1,0 +1,14 @@
+proxy_url = "http://127.0.0.1:12345"
+
+[log]
+log_level="DEBUG"
+
+[accounts.main]
+type = "polymarket_relayer_account"
+name = "test"
+private_key = ""          # 放在 secrets.toml 更安全
+funder_address = ""
+deposit_wallet = ""
+builder_api = ""
+builder_secret = ""
+builder_pass_phrase = ""

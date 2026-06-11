@@ -2,14 +2,14 @@ import asyncio
 import json
 import os
 
-import pandas as pd
-
-from s2cpy.infrastructure.time import get_unix_seconds_utc
-
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
+import pandas as pd
+
+from s2cpy.exchange.polymarket_tools import split_pusdt
+from s2cpy.infrastructure.time import get_unix_seconds_utc, TimeInterval
+
 from py_clob_client_v2 import Side
-from s2cpy.model.common_consts import USDC
 from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
 import pytest
 from loguru import logger
@@ -43,7 +43,8 @@ async def test_find_test_market():
     :return:
     """
     one_week_later = get_unix_seconds_utc() + 7 * 24 * 60 * 60
-    request = ListMarketsRequest.build(liquidity_num_min=100000, end_date_min=one_week_later,order="volume24hr",limit=100,ascending="false")
+    request = ListMarketsRequest.build(liquidity_num_min=100000, end_date_min=one_week_later, order="volume24hr",
+                                       limit=100, ascending="false")
     cfg = get_global_config()
     setup_global_logging(cfg.log)
     api = RestfulAPI()
@@ -63,7 +64,8 @@ async def test_find_test_market():
         first_event_slug = first_event.slug
         data.append([market_slug, yes_price, no_price, yes_token, no_token, end_date, first_event_slug])
 
-    df = pd.DataFrame(data, columns=['market_slug', 'yes_price', 'no_price', 'yes_token', 'no_token', 'end_date','first_event_slug' ])
+    df = pd.DataFrame(data, columns=['market_slug', 'yes_price', 'no_price', 'yes_token', 'no_token', 'end_date',
+                                     'first_event_slug'])
     df.to_csv("test_market.csv", encoding='utf-8-sig', index=False)
 
 
@@ -141,111 +143,140 @@ async def test_post_orders():
     account.create_order(**args)
     await asyncio.sleep(60 * 60)
 
-    @pytest.mark.manual
-    async def test_event_slug_to_series_id():
-        """
-        通过event的slug，去确定合适的series id。然后再根据series id获得最新的event
-        :return:
-        """
-        logger.debug(f"test_event_slug_to_series_id")
-        gamma_api = RestfulAPI()
-        event_slug = "btc-updown-15m-1777468500"
-        event_slug_request = EventGetBySlugRequest.build(slug=event_slug)
-        event = await gamma_api.get_event_by_slug(event_slug_request)
-        markets = event.markets
-        if markets is not None:
-            for market in markets:
-                logger.info(f"market id: {market.id}, slug: {market.slug},market token id:{market.clobTokenIds}")
 
-        event_series = event.series
-        if event_series is None:
-            logger.info(f"{event_slug_request.slug} has no series")
-        else:
-            for series in event_series:
-                logger.info(f"series id: {series.id}, slug: {series.slug}")
-                series_request = SeriesGetRequest.build(id=series.id)
-                series_response = await gamma_api.get_series_by_id(series_request)
-                logger.info(f"series id: {series_response.id}, slug: {series_response.slug}")
-                series_events = series_response.events if series_response.events is not None else []
-                series_events = [event for event in series_events if event.active is True and event.closed is False]
-                series_events = sorted(series_events, key=lambda e: e.startTime)
-                logger.info(f"series events num : {len(series_events)}")
-                # logger.info(f"new_events : {len(series_events)}")
-                latest_event = series_events[0]
-                logger.info(f"latest_event slug is {latest_event.slug},start_time: {latest_event.startTime}")
-                latest_market = latest_event.markets
-                logger.info(f"lastest market from series is {latest_market}")
+@pytest.mark.manual
+async def test_event_slug_to_series_id():
+    """
+    通过event的slug，去确定合适的series id。然后再根据series id获得最新的event
+    :return:
+    """
+    logger.debug(f"test_event_slug_to_series_id")
+    gamma_api = RestfulAPI()
+    event_slug = "btc-updown-15m-1777468500"
+    event_slug_request = EventGetBySlugRequest.build(slug=event_slug)
+    event = await gamma_api.get_event_by_slug(event_slug_request)
+    markets = event.markets
+    if markets is not None:
+        for market in markets:
+            logger.info(f"market id: {market.id}, slug: {market.slug},market token id:{market.clobTokenIds}")
 
-                event_id_request = EventGetByIdRequest.build(id=latest_event.id)
-                event_id_response = await gamma_api.get_event_by_id(event_id_request)
-                market_id_from_research = event_id_response.markets
-                logger.info(
-                    f"latest_event slug is {market_id_from_research[0].slug},start_time: {market_id_from_research[0].clobTokenIds}")
-                logger.info(f"market  num {len(market_id_from_research)}")
+    event_series = event.series
+    if event_series is None:
+        logger.info(f"{event_slug_request.slug} has no series")
+    else:
+        for series in event_series:
+            logger.info(f"series id: {series.id}, slug: {series.slug}")
+            series_request = SeriesGetRequest.build(id=series.id)
+            series_response = await gamma_api.get_series_by_id(series_request)
+            logger.info(f"series id: {series_response.id}, slug: {series_response.slug}")
+            series_events = series_response.events if series_response.events is not None else []
+            series_events = [event for event in series_events if event.active is True and event.closed is False]
+            series_events = sorted(series_events, key=lambda e: e.startTime)
+            logger.info(f"series events num : {len(series_events)}")
+            # logger.info(f"new_events : {len(series_events)}")
+            latest_event = series_events[0]
+            logger.info(f"latest_event slug is {latest_event.slug},start_time: {latest_event.startTime}")
+            latest_market = latest_event.markets
+            logger.info(f"lastest market from series is {latest_market}")
 
-    @pytest.mark.manual
-    async def test_crypto_repeat_data_start_listen() -> None:
-        repeat_data_feed = CryptoRepeatDataFeed()
-        printer_handler = lambda data_name, content: logger.info(f"receive:{data_name}: {content}")
-        repeat_data_feed.subscribe(printer_handler)
-        await repeat_data_feed.start()
-        await asyncio.sleep(60)
+            event_id_request = EventGetByIdRequest.build(id=latest_event.id)
+            event_id_response = await gamma_api.get_event_by_id(event_id_request)
+            market_id_from_research = event_id_response.markets
+            logger.info(
+                f"latest_event slug is {market_id_from_research[0].slug},start_time: {market_id_from_research[0].clobTokenIds}")
+            logger.info(f"market  num {len(market_id_from_research)}")
 
-    @pytest.mark.manual
-    async def test_market_make_account() -> None:
-        """
-        应该是一个最简单的实盘启动
-        :return:
-        """
 
-        logger.debug(f"test_market_make_account")
-        config = get_global_config()
-        setup_global_logging(config.log)
-        account = PolyMarketMarketMakerAccount(config.get_default_account())
-        await account.sync_account_position()
-        asset_dict = account.asset_dict
-        logger.info(f"账户有{len(asset_dict)}类资产")
-        for asset, position in asset_dict.items():
-            logger.info(f"asset: {asset}, position: {position}")
-        open_orders = account.open_orders
-        for order_id, open_order in open_orders.items():
-            logger.info(f"order_id: {order_id}, open_order: {open_order}")
+@pytest.mark.manual
+async def test_crypto_repeat_data_start_listen() -> None:
+    repeat_data_feed = CryptoRepeatDataFeed()
+    printer_handler = lambda data_name, content: logger.info(f"receive:{data_name}: {content}")
+    repeat_data_feed.subscribe(printer_handler)
+    await repeat_data_feed.start()
+    await asyncio.sleep(60)
 
-        await asyncio.sleep(60 * 60)
 
-    @pytest.mark.manual
-    async def test_ws_echo_manual():
-        """Manual test: connect to a public echo server and verify send/receive.
+@pytest.mark.manual
+async def test_market_make_account() -> None:
+    """
+    应该是一个最简单的实盘启动
+    :return:
+    """
 
-        Note: marked manual because it uses real network and an external server.
-        """
-        url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"  # public echo service (manual only)
-        ws = PolymarketWS(url, reconnect_attempts=2)
+    logger.debug(f"test_market_make_account")
+    config = get_global_config()
+    setup_global_logging(config.log)
+    account = PolyMarketMarketMakerAccount(config.get_default_account())
+    await account.sync_account_position()
+    asset_dict = account.asset_dict
+    logger.info(f"账户有{len(asset_dict)}类资产")
+    for asset, position in asset_dict.items():
+        logger.info(f"asset: {asset}, position: {position}")
+    open_orders = account.open_orders
+    for order_id, open_order in open_orders.items():
+        logger.info(f"order_id: {order_id}, open_order: {open_order}")
 
-        received = asyncio.Queue()
+    await asyncio.sleep(60 * 60)
 
-        async def on_msg(msg):
-            await received.put(msg)
 
-        ws.register_handler("default", on_msg)
+@pytest.mark.manual
+async def test_ws_echo_manual():
+    """Manual test: connect to a public echo server and verify send/receive.
 
-        await ws.connect()
-        logger.info(f"WS connected to {url}")
-        sub = {
-            "assets_ids": [
-                "26871611942842159660578538115087561842096772208823332594549095712451566897786"
-            ],
-            "type": "market",
-            "initial_dump": False,
-            "level": 2,
-            "custom_feature_enabled": True
-        }
-        await ws.send(sub)
+    Note: marked manual because it uses real network and an external server.
+    """
+    url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"  # public echo service (manual only)
+    ws = PolymarketWS(url, reconnect_attempts=2)
 
-        # wait for a message from the server (timeout to avoid hanging)
-        try:
-            msg = await asyncio.wait_for(received.get(), timeout=10)
-            logger.info(f"msg: {msg}")
-            assert isinstance(msg, dict)
-        finally:
-            await ws.close()
+    received = asyncio.Queue()
+
+    async def on_msg(msg):
+        await received.put(msg)
+
+    ws.register_handler("default", on_msg)
+
+    await ws.connect()
+    logger.info(f"WS connected to {url}")
+    sub = {
+        "assets_ids": [
+            "26871611942842159660578538115087561842096772208823332594549095712451566897786"
+        ],
+        "type": "market",
+        "initial_dump": False,
+        "level": 2,
+        "custom_feature_enabled": True
+    }
+    await ws.send(sub)
+
+    # wait for a message from the server (timeout to avoid hanging)
+    try:
+        msg = await asyncio.wait_for(received.get(), timeout=10)
+        logger.info(f"msg: {msg}")
+        assert isinstance(msg, dict)
+    finally:
+        await ws.close()
+
+
+@pytest.mark.manual
+async def test_split_usdt():
+    """
+    主要测试怎么用去split pusdt
+    :return:
+    """
+    cfg = get_global_config()
+    setup_global_logging(cfg.log)
+    interval = TimeInterval.FifteenMinute
+    slug = f"btc-updown-{interval.to_str()}-{interval.get_close_now_second()}"
+    logger.info(f"slug: {slug}")
+    gamma_api = RestfulAPI()
+    reqeust = MarketGetBySlugRequest(slug=slug)
+    market = await gamma_api.get_market_by_slug(reqeust)
+    logger.info(f"market: {market.conditionId}")
+    account_config = cfg.get_default_account()
+    account = PolyMarketMarketMakerAccount(account_config)
+    wallet_address = account_config.funder_address
+    relay_client = account._relay_client
+    deposit_wallet = account_config.deposit_wallet
+    condition_id = market.conditionId
+    assert condition_id is not None, "market.conditionId should not be None when splitting pUSDT"
+    split_pusdt(relay_client, condition_id, 1, wallet_address, deposit_wallet)
