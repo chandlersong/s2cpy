@@ -9,7 +9,7 @@ from loguru import logger
 from s2cpy.core.engine import SingleNodeLivingTradingEngine
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
-from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
+from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount
 from s2cpy.strategy.demo_strategies import PolyMarketRepeatDemoStrategy
 
 
@@ -32,7 +32,7 @@ async def main():
 
     engine = SingleNodeLivingTradingEngine()
     # 连接账户
-    account = PolyMarketMarketMakerAccount(polymarket_account)
+    account = PolyLiquidityProviderAccount(polymarket_account)
     await engine.register_account(account)
 
     repeat_data_feed = CryptoRepeatDataFeed()

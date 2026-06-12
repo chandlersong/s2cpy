@@ -12,9 +12,10 @@ from py_builder_relayer_client.client import RelayClient
 from py_builder_relayer_client.models import Transaction, RelayerTxType, SafeTransaction, OperationType, \
     DepositWalletCall, TransactionType
 
+from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
 from s2cpy.model.core_model import Asset
-from s2cpy.model.polymarket_io import Market
+from s2cpy.model.polymarket_io import Market, MarketGetByIdRequest
 from loguru import logger
 
 # 合约地址
@@ -22,8 +23,8 @@ from loguru import logger
 CTF_ADDRESS = to_checksum_address("0x4D97DCd97eC945f40cF65F87097ACe5EA0476045")
 PUSDT_ADDRESS = to_checksum_address("0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB")
 PARENT_COLLECTION_ID = "0x" + "0" * 64  # 通常为 zero bytes32
-ADAPTER = "0xAdA100Db00Ca00073811820692005400218FcE1f"  # ← 必须用这个
-NEG_RISK_ADAPTER = "0xAdA2005600Dec949baf300f4C6120000bDB6eAab"  # 选举类市场
+ADAPTER = to_checksum_address("0xAdA100Db00Ca00073811820692005400218FcE1f")  # ← 必须用这个
+NEG_RISK_ADAPTER = to_checksum_address("0xAdA2005600Dec949baf300f4C6120000bDB6eAab")  # 选举类市场
 
 PUSD_DECIMALS = 6
 
@@ -116,7 +117,7 @@ def condition_id_to_bytes32(condition_id: str) -> bytes:
 
 
 def split_pusdt(client: RelayClient, condition_id: str, amount: int, wallet_address: str, deposit_wallet: str,
-                adapter: str | None = None, ):
+                is_neg_risk: bool = False, ):
     """High-level helper to approve + setApprovalForAll + split pUSDT via the chosen adapter.
 
     If `adapter` is None, default to `ADAPTER` (regular markets). For neg-risk markets pass
@@ -126,7 +127,7 @@ def split_pusdt(client: RelayClient, condition_id: str, amount: int, wallet_addr
     split_amount = amount * (10 ** 6)
 
     # # choose adapter
-    chosen_adapter = adapter if adapter is not None else ADAPTER
+    chosen_adapter = NEG_RISK_ADAPTER if is_neg_risk else ADAPTER
     try:
         nonce_payload = client.get_nonce(
             deposit_wallet,
@@ -178,3 +179,14 @@ def convert_markets_2_assets(market: Market) -> Dict[str, Asset]:
             extra_info={"market": market},
         )
     return result
+
+
+async def asserts_by_market_id(market_id: str) -> Dict[str, Asset]:
+    """
+    把market转换成assert
+    :param market_id: market id
+    :return:
+    """
+    api = RestfulAPI()
+    market = await api.get_market_by_id(MarketGetByIdRequest(id=market_id))
+    return convert_markets_2_assets(market)

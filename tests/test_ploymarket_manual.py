@@ -10,7 +10,7 @@ from s2cpy.exchange.polymarket_tools import split_pusdt
 from s2cpy.infrastructure.time import get_unix_seconds_utc, TimeInterval
 
 from py_clob_client_v2 import Side
-from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
+from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount
 import pytest
 from loguru import logger
 
@@ -117,7 +117,7 @@ async def test_post_orders():
     """
     logger.debug(f"测试挂单和撤单")
     cfg = get_global_config()
-    account = PolyMarketMarketMakerAccount(cfg.get_default_account())
+    account = PolyLiquidityProviderAccount(cfg.get_default_account())
     handler = lambda data_name, content: logger.info(f"receive:{data_name}: {content}")
     await account.start_sync(handler)
 
@@ -206,7 +206,7 @@ async def test_market_make_account() -> None:
     logger.debug(f"test_market_make_account")
     config = get_global_config()
     setup_global_logging(config.log)
-    account = PolyMarketMarketMakerAccount(config.get_default_account())
+    account = PolyLiquidityProviderAccount(config.get_default_account())
     await account.sync_account_position()
     asset_dict = account.asset_dict
     logger.info(f"账户有{len(asset_dict)}类资产")
@@ -273,7 +273,7 @@ async def test_split_usdt():
     market = await gamma_api.get_market_by_slug(reqeust)
     logger.info(f"market: {market.conditionId}")
     account_config = cfg.get_default_account()
-    account = PolyMarketMarketMakerAccount(account_config)
+    account = PolyLiquidityProviderAccount(account_config)
     wallet_address = account_config.funder_address
     relay_client = account._relay_client
     deposit_wallet = account_config.deposit_wallet

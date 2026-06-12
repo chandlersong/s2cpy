@@ -10,6 +10,14 @@ from s2cpy.model.core_model import DataFeed, DataHandler, Asset, LiveData
 from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest
 from loguru import logger
 
+POLYMARKET_DATA_FEED_TOPICS = {
+    "book": "{name}.book",
+    "tick_size_change": "{name}.tick_size_change",
+    "last_trade_price": "{name}.last_trade_price",
+    "best_bid_ask": "{name}.best_bid_ask",
+    # "price_change": "{name}.price_change",
+}
+
 
 class CryptoRepeatDataFeed(DataFeed):
     """
@@ -32,11 +40,7 @@ class CryptoRepeatDataFeed(DataFeed):
     def supported_data_list(self) -> list[str]:
         key = self.domain_key
         return [
-            f"{key}.book",
-            # f"{key}.price_change",
-            f"{key}.tick_size_change",
-            f"{key}.last_trade_price",
-            f"{key}.best_bid_ask",
+            template.format(name=key) for template in POLYMARKET_DATA_FEED_TOPICS.values()
         ]
 
     async def start(self):
@@ -160,8 +164,9 @@ class OneMarketDataFeed(DataFeed):
 
     def supported_data_list(self) -> list[str]:
         key = self.name
-        return [f"{key}.{event_type}" for event_type in self.EVENT_LIST]
-
+        return [
+            template.format(name=key) for template in POLYMARKET_DATA_FEED_TOPICS.values()
+        ]
     async def start(self):
         """
         :return:

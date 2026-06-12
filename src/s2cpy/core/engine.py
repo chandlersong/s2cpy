@@ -26,7 +26,7 @@ from typing import Dict, Any, List, Optional
 
 from blinker import Namespace, NamedSignal
 
-from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, LiveData
+from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, LiveData, Monitor
 from loguru import logger
 
 
@@ -55,11 +55,12 @@ class SingleNodeLivingTradingEngine(Engine):
         self._namespace = Namespace()
         self._signals: Dict[str, NamedSignal] = {}
         self._strategies: Dict[str, Strategy] = {}
+        self._monitor: Dict[str, Monitor] = {}
         self._data_feeds: Dict[str, DataFeed] = {}
         self._accounts: Dict[str, Account] = {}
         self._status = self.STATUS_READY
 
-    async def register_strategy(self, strategy: Strategy, account_names: Optional[List[str]] = None):
+    async def register_strategy(self, strategy: Strategy):
         self._strategies[strategy.name] = strategy
         data_list = strategy.data_list()
 
@@ -71,6 +72,19 @@ class SingleNodeLivingTradingEngine(Engine):
                 logger.info(f"策略: {strategy.name} 订阅了数据: {topic}")
             else:
                 logger.warning(f"没有找到数据: {topic} 的信号，策略: {strategy.name} 无法订阅")
+
+    async def register_monitor(self, monitor: Monitor):
+        self._monitor[monitor.name] = monitor
+        data_list = monitor.data_list()
+
+        logger.info(f"注册监控器: {monitor.name}")
+        for topic in data_list:
+            signal = self._signals.get(topic)
+            if signal:
+                signal.connect(monitor.on_live_change)
+                logger.info(f"监控: {monitor.name} 订阅了数据: {topic}")
+            else:
+                logger.warning(f"没有找到数据: {topic} 的信号，监控: {monitor.name} 无法订阅")
 
     async def start(self):
         logger.info(f"开始运行交易的engine")

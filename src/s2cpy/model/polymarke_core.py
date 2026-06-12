@@ -1,9 +1,9 @@
 import collections
+import dataclasses
 import pickle
 from pathlib import Path
 
 from py_builder_relayer_client.client import RelayClient
-from py_builder_relayer_client.exceptions import RelayerClientException
 from py_builder_relayer_client.models import RelayerTxType
 from py_builder_signing_sdk.config import BuilderConfig
 from py_builder_signing_sdk.sdk_types import BuilderApiKeyCreds
@@ -12,11 +12,12 @@ from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType, Par
 from py_clob_client_v2.constants import POLYGON
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
+from s2cpy.exchange.polymarket_tools import asserts_by_market_id
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds, get_unix_seconds_utc
-from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler
+from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler, LiveData
 
 import asyncio
 from typing import Optional, Dict, List, Any
@@ -54,7 +55,13 @@ POLYMARKET_ACCOUNT_TOPICS = {
 }
 
 
-class PolyMarketMarketMakerAccount(Account):
+@dataclasses.dataclass
+class AssertInfo:
+    asset: Asset
+    position: Position
+
+
+class PolyLiquidityProviderAccount(Account):
     """
     具体功能描述
     1. 同步仓位信息。
@@ -106,7 +113,7 @@ class PolyMarketMarketMakerAccount(Account):
         self._config = config
         # Background periodic sync task handle. Created by `start_sync`.
         self._sync_task: Optional[asyncio.Task] = None
-        self._asset: Dict[Asset, Position] = dict()  # 资产/价格
+        self._asset: Dict[str, AssertInfo] = dict()  # assertid/AssertInfo：主要方便查询
         self._clob_client = ClobClient(
             host=_CLOB_HOST,
             chain_id=POLYGON,
@@ -114,18 +121,6 @@ class PolyMarketMarketMakerAccount(Account):
             funder=self._config.funder_address,
             signature_type=SignatureTypeV2.POLY_1271,  # POLY_1271 Deposit Wallet
         )
-        # builder_config = BuilderConfig(
-        #     local_builder_creds=BuilderApiKeyCreds(
-        #         key=os.getenv("POLY_BUILDER_API_KEY"),
-        #         secret=os.getenv("POLY_BUILDER_SECRET"),
-        #         passphrase=os.getenv("POLY_BUILDER_PASSPHRASE"),
-        #     )
-        # )
-        # self._relayer_client = RelayClient(
-        #     "https://relayer-v2.polymarket.com",
-        #     POLYGON,
-        #     self._config.private_key,
-        # )
 
         builder_config = BuilderConfig(
             local_builder_creds=BuilderApiKeyCreds(
@@ -137,11 +132,7 @@ class PolyMarketMarketMakerAccount(Account):
 
         self._relay_client = RelayClient(_RELAYER_URL, POLYGON, self._config.private_key, builder_config,
                                          relay_tx_type=RelayerTxType.PROXY)
-        # try:
-        #     self._relay_client.deploy()
-        # except RelayerClientException as e:
-        #     # 偷懒的做法，因为第一次要做一次。以后写的简单点
-        #     pass
+
         self._api_creds = self._clob_client.create_or_derive_api_key()
         self._clob_client.set_api_creds(self._api_creds)
         self._usdc_balance: float = 0.0
@@ -219,9 +210,21 @@ class PolyMarketMarketMakerAccount(Account):
         2. 通过clob获取usdc
         :return:
         """
-        await self._query_positions()
-        await self._query_balance()
-        await self._query_open_orders()
+        # Run the three independent sync steps concurrently to reduce total latency.
+        # Use gather(return_exceptions=True) so one failing step doesn't cancel the others
+        # and we can log failures individually.
+        results = await asyncio.gather(
+            self._query_positions(),
+            self._query_balance(),
+            self._query_open_orders(),
+            return_exceptions=True,
+        )
+
+        # Log any exceptions returned by gather
+        for idx, res in enumerate(results):
+            if isinstance(res, Exception):
+                step_name = ("_query_positions", "_query_balance", "_query_open_orders")[idx]
+                logger.exception(f"Error running {step_name}: {res}")
 
     async def _query_balance(self):
         client = self._clob_client
@@ -262,22 +265,22 @@ class PolyMarketMarketMakerAccount(Account):
                         logger.error(f"{position.slug}数据错误，api没有找到")
                         continue
                     validate_before = str_iso_datetime_to_unix_seconds(market.endDate)
-                    market_cache[market_slug] = validate_before
+                    market_cache[market_slug] = market
                 else:
-                    validate_before = market_cache[market_slug]
+                    validate_before = str_iso_datetime_to_unix_seconds(market_cache[market_slug].endDate)
 
                 asset = Asset(
                     identify=asset_id,
                     external_id=position.asset,
                     validate_before=validate_before,
-                    extra_info=position.to_dict()
+                    extra_info=market_cache[market_slug],
                 )
                 if position.curPrice is None or position.size is None:
                     logger.error(f"{position.slug}数据错误，价格或者数量不存在")
                     continue
                 position = Position(price=position.curPrice, quantity=position.size, avg_price=position.avgPrice,
                                     extra_info=position.to_dict())
-                self._asset[asset] = position
+                self._asset[asset_id] = AssertInfo(asset=asset, position=position)
 
     def stop_sync(self) -> None:
         """Cancel the periodic background sync task if running."""
@@ -290,7 +293,7 @@ class PolyMarketMarketMakerAccount(Account):
         logger.info(f"PolyMarket:Listening account for {config.name}")
         url = "wss://ws-subscriptions-clob.polymarket.com/ws/user"  # public echo service (manual only)
         ws = PolymarketWS(url, reconnect_attempts=2)
-        ws.register_handler("default", self._on_web_socket_message)
+        ws.register_handler("default", self.on_web_socket_message)
         await ws.connect()
         creds = self._api_creds
         sub = {
@@ -305,44 +308,85 @@ class PolyMarketMarketMakerAccount(Account):
         await ws.send(sub)
         return ws
 
-    def _on_web_socket_message(self, data: Dict[str, Any]):
+    def on_web_socket_message(self, data: Dict[str, Any]):
         logger.debug(f"PolyMarket:WebSocket message: {data}")
         event_type = data["event_type"]
         if event_type == "order":  # 处理订单逻辑
-            self._on_web_socket_order(data)
+            self.on_web_socket_order(data)
         elif event_type == "trade":  # 处理交易逻辑
-            self._on_web_socket_trade(data)
+            asyncio.run(self.on_web_socket_trade(data))
 
-    def _on_web_socket_trade(self, data: Dict[str, Any]):
+    async def on_web_socket_trade(self, data: Dict[str, Any]):
         """
         [官方资料](https://docs.polymarket.com/market-data/websocket/user-channel#trade)
         1. 根据资料，整个trade有五个，为了简化，只把failed和confirm做处理。
         :param data:
         :return:
         """
-        trade_type = data["event_type"]
+        trade_type = data["status"]
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
         export_folder = Path("/app/examples")
         if export_folder.exists():
             pickle.dump(data, open(export_folder / f'{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
 
         if trade_type == "CONFIRMED":
-            self._handler(self.get_topic("trade_confirm"), data)
+            topic = self.get_topic("trade_confirm")
         elif trade_type == "FAILED":
-            self._handler(self.get_topic("trade_failed"), data)
+            topic = self.get_topic("trade_failed")
         else:
+            # 其他的topic暂时先不弄了。
             return
-        #  TODO: 根据trade来内存修改position，这里算是偷懒了。性能会有点低
-        # Schedule async coroutine to run in the event loop so this sync handler
-        # does not need to be async. The websocket client schedules handlers on
-        # the running loop, so create_task is safe here.
-        try:
-            asyncio.create_task(self.sync_account_position())
-        except RuntimeError:
-            logger.exception("Failed to schedule background task for sync_account_position")
 
-    def _on_web_socket_order(self, data: Dict[str, Any]):
+        price = data["price"]
+        quantity = data["size"]
+        asset_id = data["asset_id"]
+        asset = None
+        if asset_id not in self._asset:
+            """
+            polymarket没有合约，不可能卖空。所以第一笔交易必然是买的。
+            """
+            market_id = data["market"]
+            logger.info(f"新的交易的asset:{asset_id},不存在缓存中，开始更新，market_id:{market_id}")
+            assets = await asserts_by_market_id(market_id)
+            for k, v in assets.items():
+                if k == asset_id:
+                    position = Position(latest_price=price, quantity=quantity, avg_price=price)
+                    info = AssertInfo(asset=v, position=position)
+                    self._asset[k] = info
+                    asset = v
+                    break
+            if asset is None:
+                logger.error(f"assert:{asset_id}，market{market_id},没有在polymarket上找到，请检查")
+                # TODO:加入到通知用户环节，为的是保护用户
+                return
+        else:
+            side = 1 if data["side"] == "BUY" else -1
+            info = self._asset[asset_id]
+            asset = info.asset
+            if side == 1:
+                p = info.position
+                total_cost = price * quantity + p.quantity * p.avg_price
+                p.latest_price = price
+                p.quantity = quantity + p.quantity
+                p.avg_price = total_cost / p.quantity
+            else:
+                p = info.position
+                total_cost = p.quantity * p.avg_price - price * quantity
+                p.latest_price = price
+                p.quantity = p.quantity - quantity
+                p.avg_price = total_cost / p.quantity
+                if p.quantity < 0:
+                    # 算是一个错误处理吧。
+                    asyncio.create_task(self.sync_account_position())
+
+        live_data = LiveData(topic=topic, asset=asset, data=data)
+        self._handler(topic, live_data)
+
+    def on_web_socket_order(self, data: Dict[str, Any]):
         """
+        1. PLACEMENT的时候需要更新本地的可以交易金额。
+        2. UPDATE过滤
+        3. CANCELLATION的时候，恢复金额
 
         [polymarket order status](https://docs.polymarket.com/market-data/websocket/user-channel#order)
         :param data:
@@ -380,7 +424,3 @@ class PolyMarketMarketMakerAccount(Account):
         except RuntimeError:
             logger.exception("Failed to schedule background task for sync_account_position")
 
-    async def sync_balance_and_positions(self):
-        #  TODO: 根据order来内存修改position，这里算是偷懒了。性能会有点低
-        await asyncio.create_task(self._query_positions())
-        await asyncio.create_task(self._query_balance())

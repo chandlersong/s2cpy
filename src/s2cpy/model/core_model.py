@@ -25,7 +25,7 @@ class Order:
 
 @dataclasses.dataclass
 class Position:
-    price: float
+    latest_price: float
     quantity: float
     avg_price: Optional[float] = None
     extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
@@ -205,6 +205,17 @@ class Strategy(Protocol):
         同时因为一些异步方法，需要从这里来调用
         :return:
         """
+        pass
+
+
+class Monitor(Strategy):
+    """
+    纯粹是一个placeholder的interface。
+    主要是为了一些记录用的
+    """
+
+    @abc.abstractmethod
+    def data_list(self) -> List[str]:
         pass
 
 

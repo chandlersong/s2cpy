@@ -4,7 +4,7 @@ from s2cpy.infrastructure.time import TimeInterval
 from s2cpy.model.core_model import Strategy, LiveData, Account
 from loguru import logger
 
-from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount, POLYMARKET_ACCOUNT_TOPICS
+from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount, POLYMARKET_ACCOUNT_TOPICS
 
 
 class PolyMarketRepeatDemoStrategy(Strategy):
@@ -27,7 +27,7 @@ class PolyMarketRepeatDemoStrategy(Strategy):
         logger.info(f"策略注册市场的topic:{market_topic}")
         return account_topic
 
-    def __init__(self, account: PolyMarketMarketMakerAccount, coin_name="btc",
+    def __init__(self, account: PolyLiquidityProviderAccount, coin_name="btc",
                  interval: TimeInterval = TimeInterval.FifteenMinute):
         self._coin_name = coin_name
         self._interval = interval

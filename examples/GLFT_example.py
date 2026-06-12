@@ -11,7 +11,7 @@ from s2cpy.strategy.glft_market_strategy import PolyMarketGLFTStrategy
 from s2cpy.core.engine import SingleNodeLivingTradingEngine
 from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
-from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
+from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount
 
 
 async def main():
@@ -33,7 +33,7 @@ async def main():
 
     engine = SingleNodeLivingTradingEngine()
     # 连接账户
-    account = PolyMarketMarketMakerAccount(polymarket_account)
+    account = PolyLiquidityProviderAccount(polymarket_account)
     await engine.register_account(account)
 
     one_market_data_feed = CryptoRepeatDataFeed()

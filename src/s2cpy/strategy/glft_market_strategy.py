@@ -6,13 +6,13 @@ from s2cpy.algorithms.glfts import RollingGLFT
 from s2cpy.data_feeds.ploymarket_feed import OneMarketDataFeed
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.model.core_model import Strategy, LiveData
-from s2cpy.model.polymarke_core import PolyMarketMarketMakerAccount
+from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount
 from s2cpy.model.polymarket_io import MarketGetBySlugRequest
 
 
 class PolyMarketGLFTStrategy(Strategy):
 
-    def __init__(self, account: PolyMarketMarketMakerAccount, market_slug: str):
+    def __init__(self, account: PolyLiquidityProviderAccount, market_slug: str):
         self._market_slug = market_slug
         self._account = account
         self._yes_token = None
