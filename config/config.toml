@@ -5,7 +5,7 @@ instance_name = "开发项目"
 [accounts.main]
 type = "polymarket_relayer_account"
 name = "test"
-private_key = "a"          # 放在 secrets.toml 更安全
+private_key = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"          # 放在 secrets.toml 更安全
 funder_address = "b"
 deposit_wallet = "c"
 builder_api = "d"
