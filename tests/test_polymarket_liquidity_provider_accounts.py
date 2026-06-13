@@ -34,8 +34,8 @@ async def test_new_trade_complete(mock_clob_cls, mock_assets):
         "status": "CONFIRMED",
         "asset_id": "1234567890",
         "market": "abc",
-        "size": 10,
-        "price": 8
+        "size": "10",
+        "price": "8"
     }
     account._handler = subscribe
     account._asset = {}
@@ -82,8 +82,8 @@ async def test_trade_buy(mock_clob_cls):
         "status": "CONFIRMED",
         "asset_id": "1234567890",
         "market": "abc",
-        "size": 15,
-        "price": 8,
+        "size": "15",
+        "price": "8",
         "side": "BUY"
     }
     account._handler = subscribe
@@ -129,8 +129,8 @@ async def test_trade_sell(mock_clob_cls):
         "status": "CONFIRMED",
         "asset_id": "1234567890",
         "market": "abc",
-        "size": 5,
-        "price": 8,
+        "size": "5",
+        "price": "8",
         "side": "SELL"
     }
     account._handler = subscribe
@@ -176,8 +176,8 @@ async def test_trade_fail(mock_clob_cls):
         "status": "FAILED",
         "asset_id": "1234567890",
         "market": "abc",
-        "size": 5,
-        "price": 8,
+        "size": "5",
+        "price": "8",
         "side": "SELL"
     }
     account._handler = subscribe
@@ -203,6 +203,156 @@ async def test_trade_fail(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("trade_failed")
+    from s2cpy.model.core_model import LiveData
+    assert isinstance(live_data_arg, LiveData)
+    assert live_data_arg.asset == asset
+    assert live_data_arg.data == data
+
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_order_update_sell(mock_clob_cls):
+    """
+    更新order需要做的逻辑
+    1. 改变仓位。为交易的部分
+    2. 发送给下游
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    subscribe = MagicMock()
+    account = create_mock_account(mock_clob_cls)
+    data = {
+        "id": "abc",
+        "type": "UPDATE",
+        "asset_id": "1234567890",
+        "market": "abc",
+        "price": 8,
+        "original_size": "10",
+        "size_matched": "5",
+        "side": "SELL"
+    }
+    account._handler = subscribe
+    account._usdc_balance = 10
+    position = Position(latest_price=1, quantity=20, avg_price=5)
+    asset = MagicMock()
+    account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
+    account.on_web_socket_order(data)
+
+    assets = account._asset
+
+    assert "1234567890" in assets
+    info = assets["1234567890"]
+    assert info is not None
+    position = info.position
+    assert position.latest_price == 8
+    assert position.quantity == 15
+    assert position.avg_price == 4
+    assert account._usdc_balance == 10
+    subscribe.assert_called_once()
+    # Verify subscribe was called with expected topic and LiveData
+    call_args = subscribe.call_args
+    assert call_args is not None
+    topic_arg, live_data_arg = call_args[0]
+    assert topic_arg == account.get_topic("order_update")
+    from s2cpy.model.core_model import LiveData
+    assert isinstance(live_data_arg, LiveData)
+    assert live_data_arg.asset == asset
+    assert live_data_arg.data == data
+
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_order_update_buy(mock_clob_cls):
+    """
+    更新order需要做的逻辑
+    1. 改变仓位。为交易的部分
+    2. 发送给下游
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    subscribe = MagicMock()
+    account = create_mock_account(mock_clob_cls)
+    data = {
+        "id": "abc",
+        "type": "UPDATE",
+        "asset_id": "1234567890",
+        "market": "abc",
+        "price": 8,
+        "original_size": "10",
+        "size_matched": "5",
+        "side": "BUY"
+    }
+    account._handler = subscribe
+    account._usdc_balance = 10
+    position = Position(latest_price=1, quantity=20, avg_price=5)
+    asset = MagicMock()
+    account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
+    account.on_web_socket_order(data)
+
+    assets = account._asset
+
+    assert "1234567890" in assets
+    info = assets["1234567890"]
+    assert info is not None
+    position = info.position
+    assert position.latest_price == 8
+    assert position.quantity == 25
+    assert position.avg_price == 5.6
+    assert account._usdc_balance == 10
+    subscribe.assert_called_once()
+    # Verify subscribe was called with expected topic and LiveData
+    call_args = subscribe.call_args
+    assert call_args is not None
+    topic_arg, live_data_arg = call_args[0]
+    assert topic_arg == account.get_topic("order_update")
+    from s2cpy.model.core_model import LiveData
+    assert isinstance(live_data_arg, LiveData)
+    assert live_data_arg.asset == asset
+    assert live_data_arg.data == data
+
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_order_cancel(mock_clob_cls):
+    """
+    更新order 取消逻辑
+    1. 改变仓位。为交易的部分
+    2. 发送给下游
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    subscribe = MagicMock()
+    account = create_mock_account(mock_clob_cls)
+    data = {
+        "id": "abc",
+        "type": "CANCELLATION",
+        "asset_id": "1234567890",
+        "market": "abc",
+        "price": 8,
+        "original_size": "10",
+        "size_matched": "5",
+        "side": "BUY"
+    }
+    account._handler = subscribe
+    account._usdc_balance = 10
+    position = Position(latest_price=1, quantity=20, avg_price=5)
+    asset = MagicMock()
+    account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
+    account.on_web_socket_order(data)
+
+    assets = account._asset
+
+    assert "1234567890" in assets
+    info = assets["1234567890"]
+    assert info is not None
+    position = info.position
+    assert position.latest_price == 1
+    assert position.quantity == 20
+    assert position.avg_price == 5
+    assert account._usdc_balance == 50
+    subscribe.assert_called_once()
+    # Verify subscribe was called with expected topic and LiveData
+    call_args = subscribe.call_args
+    assert call_args is not None
+    topic_arg, live_data_arg = call_args[0]
+    assert topic_arg == account.get_topic("order_cancelled")
     from s2cpy.model.core_model import LiveData
     assert isinstance(live_data_arg, LiveData)
     assert live_data_arg.asset == asset

@@ -96,7 +96,15 @@ class PolyLiquidityProviderAccount(Account):
     """
 
     def create_order(self, **kwargs) -> Optional[str]:
-        # TODO： 动态的获得这个ticker
+        """
+         TODO：
+         1. 动态的获得这个ticker(缓存机制)
+         2. 判断asset是否存在，如果不存在。就更新
+         3. 更新usdc的balance
+        :param kwargs:
+        :return:
+        """
+
         options = PartialCreateOrderOptions(
             tick_size="0.001"
         )
@@ -228,6 +236,9 @@ class PolyLiquidityProviderAccount(Account):
         同步账户的订单信息。
         1. 通过api /positions 去获取所有assert
         2. 通过clob获取usdc
+
+        FUTURE：优化点
+        1. 完成后更新order的asset信息，可能有些order。但是没有asset。比如重启的时候。
         :return:
         """
         # Run the three independent sync steps concurrently to reduce total latency.
@@ -264,6 +275,12 @@ class PolyLiquidityProviderAccount(Account):
             self._open_orders[id_] = order
 
     async def _query_positions(self):
+        """
+        TODO：优化一下
+        1. 删除过期的asset
+        2. 去掉一些其他逻辑
+        :return:
+        """
         gramma_api = RestfulAPI()
         acc_config = self._config
         response = await gramma_api.positions(acc_config.funder_address)
@@ -298,7 +315,7 @@ class PolyLiquidityProviderAccount(Account):
                 if position.curPrice is None or position.size is None:
                     logger.error(f"{position.slug}数据错误，价格或者数量不存在")
                     continue
-                position = Position(price=position.curPrice, quantity=position.size, avg_price=position.avgPrice,
+                position = Position(latest_price=position.curPrice, quantity=position.size, avg_price=position.avgPrice,
                                     extra_info=position.to_dict())
                 self._asset[asset_id] = AssertInfo(asset=asset, position=position)
 
@@ -340,6 +357,11 @@ class PolyLiquidityProviderAccount(Account):
         """
         [官方资料](https://docs.polymarket.com/market-data/websocket/user-channel#trade)
         1. 根据资料，整个trade有五个，为了简化，只把failed和confirm做处理。
+
+        FUTURE：改进项目
+        1.部分成功的时候是怎么处理的。这个还是未知。所以暂时放弃。
+        2.去掉初始化 asset。因为create order的时候，就会出现
+
         :param data:
         :return:
         """
@@ -347,10 +369,10 @@ class PolyLiquidityProviderAccount(Account):
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
         export_folder = Path("/app/examples")
         if export_folder.exists():
-            pickle.dump(data, open(export_folder / f'{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+            pickle.dump(data, open(export_folder / f'trade_{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
         refresh_position = True
-        price = data["price"]
-        quantity = data["size"]
+        price = float(data["price"])
+        quantity = float(data["size"])
         if trade_type == "CONFIRMED":
             topic = self.get_topic("trade_confirm")
         elif trade_type == "FAILED":
@@ -408,42 +430,57 @@ class PolyLiquidityProviderAccount(Account):
 
     def on_web_socket_order(self, data: Dict[str, Any]):
         """
-        1. PLACEMENT的时候需要更新本地的可以交易金额。
-        2. UPDATE过滤
-        3. CANCELLATION的时候，恢复金额
+        这里的逻辑比较
+        1. PLACEMENT: 过滤。从文档上来看，就是上订单簿了。暂时感觉对于下游没有什么意义。
+        2. UPDATE：更新仓位
+        3. CANCELLATION的时候，恢复balance
 
         [polymarket order status](https://docs.polymarket.com/market-data/websocket/user-channel#order)
         :param data:
         :return:
         """
         order_type = data["type"]
-        if order_type == "PLACEMENT":  # null
-            side = 1 if data["side"] == "BUY" else -1
-            id_: str = data["id"]
-            order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
-                          status=data["type"], price=data["price"], extra_info=data)
-            self._open_orders[id_] = order
+        # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
+        export_folder = Path("/app/examples")
+        asset_info = self._asset[data["asset_id"]]
+        price = float(data["price"])
+        quantity = float(data["size_matched"])
+        id_: str = data["id"]
+        side = 1 if data["side"] == "BUY" else -1
+        if export_folder.exists():
+            pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
 
-            self._handler(self.get_topic("new_order"), order)
-        elif order_type == "CANCELLATION":
+        if order_type == "CANCELLATION":
             id_: str = data["id"]
             if id_ in self._open_orders:
-                pop = self._open_orders.pop(id_)
-                pop.status = "CANCELLATION"
-                pop.extra_info = data
-                self._handler(self.get_topic("order_cancelled"), pop)
-
+                _ = self._open_orders.pop(id_)
+            if side == 1:
+                # 因为只有买的时候，会退钱。但是如果说卖，仓位和金额都不变。
+                # TODO: 确认这个逻辑
+                usdc_return = price * quantity
+                self._usdc_balance += usdc_return
+            topic = self.get_topic("order_cancelled")
+            live_data = LiveData(topic=topic, asset=asset_info.asset, data=data)
+            self._handler(topic, live_data)
         elif order_type == "UPDATE":
-
-            id_: str = data["id"]
-            side = 1 if data["side"] == "BUY" else -1
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
                           status=data["type"], price=data["price"], extra_info=data)
             self._open_orders[id_] = order
-            self._handler(self.get_topic("order_update"), order)
-        # Schedule a background sync of positions/balance instead of calling the
-        # async coroutine directly (avoids 'coroutine was never awaited').
-        try:
-            asyncio.create_task(self.sync_account_position())
-        except RuntimeError:
-            logger.exception("Failed to schedule background task for sync_account_position")
+            if side == 1:
+                position = asset_info.position
+                cost = position.quantity * position.avg_price + price * quantity
+                position.quantity = position.quantity + quantity
+            else:
+                position = asset_info.position
+                cost = position.quantity * position.avg_price - price * quantity
+                position.quantity = position.quantity - quantity
+            position.latest_price = price
+
+            position.avg_price = cost / position.quantity
+            if position.quantity < 0:
+                # 算是一个错误处理吧。
+                asyncio.run(self.sync_account_position())
+
+            topic = self.get_topic("order_update")
+            live_data = LiveData(topic=topic, asset=asset_info.asset, data=data)
+            self._handler(topic, live_data)
