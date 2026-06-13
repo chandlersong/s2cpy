@@ -63,6 +63,26 @@ class AssertInfo:
 
 class PolyLiquidityProviderAccount(Account):
     """
+    # 信息同步
+    因为像position，账户余额等信息，不太可能实事同步。所以做出以下规则。
+    然后每隔一段时间去做同步。
+
+    ## balance
+    采用这样的策略，来处理相应的保守的时间点。
+    正常流程：
+    - 创建订单时减去相应的金额。
+    - 在卖出的交易被确认时候加上。
+
+    取消流程：（需要确认）
+    - order被取消时加回。
+    - trade被取消。
+
+    # Position
+    完全根据相应的position取更新
+
+    # order
+    完全根据相应的order取更新。
+
     具体功能描述
     1. 同步仓位信息。
         - 启动时。同步订单信息
@@ -70,7 +90,7 @@ class PolyLiquidityProviderAccount(Account):
     2. 同步订单信息。
         - 下达订单的信息。
         - 监听订单成功与否的信息。
-    3. 发送消息给engine，进入bus
+    3. 发送消息给engine。
         - 订单成交与失败。包括订单和仓位变化。
 
     """
@@ -328,17 +348,19 @@ class PolyLiquidityProviderAccount(Account):
         export_folder = Path("/app/examples")
         if export_folder.exists():
             pickle.dump(data, open(export_folder / f'{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
-
+        refresh_position = True
+        price = data["price"]
+        quantity = data["size"]
         if trade_type == "CONFIRMED":
             topic = self.get_topic("trade_confirm")
         elif trade_type == "FAILED":
             topic = self.get_topic("trade_failed")
+            refresh_position = False
+            self._usdc_balance += quantity * price
         else:
             # 其他的topic暂时先不弄了。
             return
 
-        price = data["price"]
-        quantity = data["size"]
         asset_id = data["asset_id"]
         asset = None
         if asset_id not in self._asset:
@@ -348,36 +370,38 @@ class PolyLiquidityProviderAccount(Account):
             market_id = data["market"]
             logger.info(f"新的交易的asset:{asset_id},不存在缓存中，开始更新，market_id:{market_id}")
             assets = await asserts_by_market_id(market_id)
-            for k, v in assets.items():
-                if k == asset_id:
-                    position = Position(latest_price=price, quantity=quantity, avg_price=price)
-                    info = AssertInfo(asset=v, position=position)
-                    self._asset[k] = info
-                    asset = v
-                    break
-            if asset is None:
-                logger.error(f"assert:{asset_id}，market{market_id},没有在polymarket上找到，请检查")
-                # TODO:加入到通知用户环节，为的是保护用户
-                return
+            if refresh_position:
+                for k, v in assets.items():
+                    if k == asset_id:
+                        position = Position(latest_price=price, quantity=quantity, avg_price=price)
+                        info = AssertInfo(asset=v, position=position)
+                        self._asset[k] = info
+                        asset = v
+                        break
+                if asset is None:
+                    logger.error(f"assert:{asset_id}，market{market_id},没有在polymarket上找到，请检查")
+                    # TODO:加入到通知用户环节，为的是保护用户
+                    return
         else:
             side = 1 if data["side"] == "BUY" else -1
             info = self._asset[asset_id]
             asset = info.asset
-            if side == 1:
-                p = info.position
-                total_cost = price * quantity + p.quantity * p.avg_price
-                p.latest_price = price
-                p.quantity = quantity + p.quantity
-                p.avg_price = total_cost / p.quantity
-            else:
-                p = info.position
-                total_cost = p.quantity * p.avg_price - price * quantity
-                p.latest_price = price
-                p.quantity = p.quantity - quantity
-                p.avg_price = total_cost / p.quantity
-                if p.quantity < 0:
-                    # 算是一个错误处理吧。
-                    asyncio.create_task(self.sync_account_position())
+            if refresh_position:
+                if side == 1:
+                    p = info.position
+                    total_cost = price * quantity + p.quantity * p.avg_price
+                    p.latest_price = price
+                    p.quantity = quantity + p.quantity
+                    p.avg_price = total_cost / p.quantity
+                else:
+                    p = info.position
+                    total_cost = p.quantity * p.avg_price - price * quantity
+                    p.latest_price = price
+                    p.quantity = p.quantity - quantity
+                    p.avg_price = total_cost / p.quantity
+                    if p.quantity < 0:
+                        # 算是一个错误处理吧。
+                        asyncio.create_task(self.sync_account_position())
 
         live_data = LiveData(topic=topic, asset=asset, data=data)
         self._handler(topic, live_data)
@@ -423,4 +447,3 @@ class PolyLiquidityProviderAccount(Account):
             asyncio.create_task(self.sync_account_position())
         except RuntimeError:
             logger.exception("Failed to schedule background task for sync_account_position")
-

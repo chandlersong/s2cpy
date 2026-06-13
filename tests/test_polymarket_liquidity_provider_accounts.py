@@ -20,6 +20,8 @@ def create_mock_account(mock_clob_cls) -> PolyLiquidityProviderAccount:
 async def test_new_trade_complete(mock_clob_cls, mock_assets):
     """
     如果成交的订单，不在资产列表中。那么就更新资产列表
+    - 仓位新建一个asset的
+    - 其包含所有的asset等信息。
     :param mock_api: mock调用API的代码
     :param mock_clob_cls: mockclob的api
     :return:
@@ -65,9 +67,11 @@ async def test_new_trade_complete(mock_clob_cls, mock_assets):
 
 
 @patch("s2cpy.model.polymarke_core.ClobClient")
-async def test_new_trade_buy(mock_clob_cls):
+async def test_trade_buy(mock_clob_cls):
     """
-    如果成交的订单，不在资产列表中。那么就更新资产列表
+      成交了一笔买入的订单。
+    - 仓位该改变。
+    - 发送消息
     :param mock_api: mock调用API的代码
     :param mock_clob_cls: mockclob的api
     :return:
@@ -111,10 +115,11 @@ async def test_new_trade_buy(mock_clob_cls):
 
 
 @patch("s2cpy.model.polymarke_core.ClobClient")
-async def test_new_trade_sell(mock_clob_cls):
+async def test_trade_sell(mock_clob_cls):
     """
-    如果成交的订单，不在资产列表中。那么就更新资产列表
-    :param mock_api: mock调用API的代码
+    成交了一笔卖出的订单。
+    - 仓位该改变。
+    - 发送消息
     :param mock_clob_cls: mockclob的api
     :return:
     """
@@ -150,6 +155,54 @@ async def test_new_trade_sell(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("trade_confirm")
+    from s2cpy.model.core_model import LiveData
+    assert isinstance(live_data_arg, LiveData)
+    assert live_data_arg.asset == asset
+    assert live_data_arg.data == data
+
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_trade_fail(mock_clob_cls):
+    """
+    如果订单失败，
+    1. 不改变仓位
+    2. 改变balance
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    subscribe = MagicMock()
+    account = create_mock_account(mock_clob_cls)
+    data = {
+        "status": "FAILED",
+        "asset_id": "1234567890",
+        "market": "abc",
+        "size": 5,
+        "price": 8,
+        "side": "SELL"
+    }
+    account._handler = subscribe
+    account._usdc_balance = 10
+    position = Position(latest_price=1, quantity=20, avg_price=5)
+    asset = MagicMock()
+    account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
+    await account.on_web_socket_trade(data)
+
+    assets = account._asset
+
+    assert "1234567890" in assets
+    info = assets["1234567890"]
+    assert info is not None
+    position = info.position
+    assert position.latest_price == 1
+    assert position.quantity == 20
+    assert position.avg_price == 5
+    assert account._usdc_balance == 50
+    subscribe.assert_called_once()
+    # Verify subscribe was called with expected topic and LiveData
+    call_args = subscribe.call_args
+    assert call_args is not None
+    topic_arg, live_data_arg = call_args[0]
+    assert topic_arg == account.get_topic("trade_failed")
     from s2cpy.model.core_model import LiveData
     assert isinstance(live_data_arg, LiveData)
     assert live_data_arg.asset == asset
