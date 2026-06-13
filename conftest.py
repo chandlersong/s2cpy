@@ -16,8 +16,14 @@ def pytest_configure(config):
     token `manual`) we set ENV=dev unless ENV is already set.
     """
     markexpr = getattr(config.option, "markexpr", "") or ""
-    # Look for the standalone word `manual` in the -m expression.
-    if markexpr and re.search(r"\bmanual\b", markexpr):
+    # Look for the standalone word `manual` in the -m expression but
+    # ignore occurrences where the expression explicitly negates it
+    # (e.g. "not manual").
+    if (
+        markexpr
+        and re.search(r"\bmanual\b", markexpr)
+        and not re.search(r"\bnot\s+manual\b", markexpr)
+    ):
         # Do not overwrite an explicitly provided ENV
         os.environ["ENV"] = "dev"
 
