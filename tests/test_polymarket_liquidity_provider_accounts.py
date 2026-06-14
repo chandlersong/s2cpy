@@ -449,7 +449,7 @@ async def test_orders_by_asset_empty(mock_clob_cls):
     """
     account = create_mock_account(mock_clob_cls)
     account._open_orders = {}
-    grouped = account.orders_by_asset
+    grouped = account.orders_group_by_asset
     assert grouped == {}
 
     with pytest.raises(ValueError, match="market test, orderPriceMinTickSize 0.2 is not valid"):
@@ -479,7 +479,7 @@ async def test_orders_by_asset_grouping(mock_clob_cls):
 
     account._open_orders = {"o1": o1, "o2": o2, "o3": o3}
 
-    grouped = account.orders_by_asset
+    grouped = account.orders_group_by_asset
 
     assert set(grouped.keys()) == {"a1", "a2"}
     assert len(grouped["a1"]) == 2

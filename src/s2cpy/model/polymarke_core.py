@@ -219,7 +219,7 @@ class PolyLiquidityProviderAccount(Account):
         ]
 
     @property
-    def orders_by_asset(self) -> Dict[str, List[Order]]:
+    def orders_group_by_asset(self) -> Dict[str, List[Order]]:
         """
         根据order的asset_id的区别，把相同的asset_id的order放入list。最后组成一个list返回
         :return:
