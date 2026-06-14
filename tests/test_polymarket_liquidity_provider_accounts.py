@@ -38,7 +38,12 @@ async def test_new_trade_complete(mock_clob_cls, mock_assets):
         "asset_id": "1234567890",
         "market": "abc",
         "size": "10",
-        "price": "8"
+        "price": "8",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ]
     }
     account._handler = subscribe
     account._asset = {}
@@ -87,7 +92,12 @@ async def test_trade_buy(mock_clob_cls):
         "market": "abc",
         "size": "15",
         "price": "8",
-        "side": "BUY"
+        "side": "BUY",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ]
     }
     account._handler = subscribe
     position = Position(latest_price=1, quantity=5, avg_price=5)
@@ -134,7 +144,12 @@ async def test_trade_sell(mock_clob_cls):
         "market": "abc",
         "size": "5",
         "price": "8",
-        "side": "SELL"
+        "side": "SELL",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ]
     }
     account._handler = subscribe
     position = Position(latest_price=1, quantity=20, avg_price=5)
@@ -181,7 +196,12 @@ async def test_trade_fail(mock_clob_cls):
         "market": "abc",
         "size": "5",
         "price": "8",
-        "side": "SELL"
+        "side": "SELL",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ]
     }
     account._handler = subscribe
     account._usdc_balance = 10
@@ -231,7 +251,12 @@ async def test_order_update_sell(mock_clob_cls):
         "price": 8,
         "original_size": "10",
         "size_matched": "5",
-        "side": "SELL"
+        "side": "SELL",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ]
     }
     account._handler = subscribe
     account._usdc_balance = 10
@@ -281,7 +306,12 @@ async def test_order_update_buy(mock_clob_cls):
         "price": 8,
         "original_size": "10",
         "size_matched": "5",
-        "side": "BUY"
+        "side": "BUY",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ]
     }
     account._handler = subscribe
     account._usdc_balance = 10
@@ -331,7 +361,12 @@ async def test_order_cancel(mock_clob_cls):
         "price": 8,
         "original_size": "10",
         "size_matched": "5",
-        "side": "BUY"
+        "side": "BUY",
+        "maker_orders": [
+            {
+                "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+            }
+        ],
     }
     account._handler = subscribe
     account._usdc_balance = 10
@@ -442,6 +477,7 @@ async def test_create_order_exception_flow(mock_clob_cls):
         }
         account.create_order(**arg)
 
+
 @patch("s2cpy.model.polymarke_core.ClobClient")
 async def test_orders_by_asset_empty(mock_clob_cls):
     """
@@ -465,6 +501,7 @@ async def test_orders_by_asset_empty(mock_clob_cls):
         }
         account.create_order(**arg)
 
+
 @patch("s2cpy.model.polymarke_core.ClobClient")
 async def test_orders_by_asset_grouping(mock_clob_cls):
     """
@@ -485,6 +522,3 @@ async def test_orders_by_asset_grouping(mock_clob_cls):
     assert len(grouped["a1"]) == 2
     assert o1 in grouped["a1"] and o2 in grouped["a1"]
     assert len(grouped["a2"]) == 1 and grouped["a2"][0] is o3
-
-
-

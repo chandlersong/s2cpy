@@ -438,8 +438,18 @@ class PolyLiquidityProviderAccount(Account):
         else:
             # 其他的topic暂时先不弄了。
             return
-
+        maker_orders = data['maker_orders']
+        for maker_order in maker_orders:
+            order_id = maker_order["order_id"]
+            if order_id in self._open_orders:
+                del self._open_orders[order_id]
+            else:
+                # TODO:监控代码，确认后去掉
+                logger.warning(f"trade的maker_order:{order_id}，在open_orders中没有找到，请检查")
         asset_id = data["asset_id"]
+        orders = self.orders_group_by_asset[asset_id]
+        # TODO:监控代码，确认后去掉
+        logger.info(f"{asset_id}，trade type:{trade_type}，现有orders:{len(orders)}")
         asset = None
         if asset_id not in self._asset:
             """
