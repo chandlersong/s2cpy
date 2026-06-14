@@ -1,5 +1,8 @@
 from unittest.mock import patch, AsyncMock, MagicMock
 
+import pytest
+from py_clob_client_v2 import Side
+
 from s2cpy.infrastructure.settings import get_global_config
 from s2cpy.model.core_model import Position
 from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount, AssertInfo
@@ -357,3 +360,96 @@ async def test_order_cancel(mock_clob_cls):
     assert isinstance(live_data_arg, LiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
+
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_create_order_buy(mock_clob_cls):
+    """
+    更新order 取消逻辑
+    1. 要改变usdc_balance
+    2. 发送给下游
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    account = create_mock_account(mock_clob_cls)
+    account._usdc_balance = 10
+    asset_info = MagicMock()
+    account._asset = {"1234567890": asset_info}
+    market = MagicMock()
+    market.orderPriceMinTickSize = "0.1"
+    arg = {
+        "token_id": "1234567890",
+        "price": 0.006,
+        "size": 5,
+        "side": Side.BUY,
+        "market": market,
+    }
+
+    account.create_order(**arg)
+
+    assert account._usdc_balance == 9.97
+
+
+@patch("s2cpy.model.polymarke_core.convert_markets_2_assets")
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_create_order_no_asset(mock_clob_cls, mock_convert_markets_2_assets):
+    """
+    更新order 取消逻辑
+    1. 要改变usdc_balance
+    2. 发送给下游
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    asset = MagicMock()
+    mock_convert_markets_2_assets.return_value = {"1234567890": asset}
+    account = create_mock_account(mock_clob_cls)
+    account._usdc_balance = 10
+    market = MagicMock()
+    market.orderPriceMinTickSize = "0.1"
+    arg = {
+        "token_id": "1234567890",
+        "price": 0.006,
+        "size": 5,
+        "side": Side.SELL,
+        "market": market,
+    }
+
+    account.create_order(**arg)
+
+    assert account._usdc_balance == 10
+    assert "1234567890" in account._asset
+
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_create_order_exception_flow(mock_clob_cls):
+    """
+    更新order 取消逻辑
+    1. 要改变usdc_balance
+    2. 发送给下游
+    :param mock_clob_cls: mockclob的api
+    :return:
+    """
+    account = create_mock_account(mock_clob_cls)
+    account._usdc_balance = 10
+
+    with pytest.raises(ValueError, match="参数中没有market"):
+        arg = {
+            "token_id": "1234567890",
+            "price": 0.006,
+            "size": 5,
+            "side": Side.BUY,
+        }
+        account.create_order(**arg)
+
+    with pytest.raises(ValueError, match="market test, orderPriceMinTickSize 0.2 is not valid"):
+        market = MagicMock()
+        market.orderPriceMinTickSize = "0.2"
+        market.slug = "test"
+        arg = {
+            "token_id": "1234567890",
+            "price": 0.006,
+            "size": 5,
+            "side": Side.BUY,
+            "market": market,
+        }
+        account.create_order(**arg)

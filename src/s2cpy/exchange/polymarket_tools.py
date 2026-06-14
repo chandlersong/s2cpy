@@ -4,13 +4,14 @@
 import os
 
 import time
-from typing import Dict
+from typing import Dict, get_args
 
 from eth_abi import encode
 from eth_utils import keccak, to_checksum_address
 from py_builder_relayer_client.client import RelayClient
 from py_builder_relayer_client.models import Transaction, RelayerTxType, SafeTransaction, OperationType, \
     DepositWalletCall, TransactionType
+from py_clob_client_v2 import TickSize
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
@@ -190,3 +191,42 @@ async def asserts_by_market_id(market_id: str) -> Dict[str, Asset]:
     api = RestfulAPI()
     market = await api.get_market_by_id(MarketGetByIdRequest(id=market_id))
     return convert_markets_2_assets(market)
+
+def is_valid_tick_size(s: str) -> bool:
+    # First, if TickSize is a typing.Literal (common in py_clob_client_v2),
+    # `get_args(TickSize)` returns the allowed literal values at runtime.
+    try:
+        args = get_args(TickSize)
+        if args:
+            # normalize to string for comparison
+            allowed = {str(a) for a in args}
+            return s in allowed
+    except Exception:
+        pass
+
+    # If TickSize is an Enum-like or iterable, try to iterate its members
+    try:
+        for member in TickSize:
+            val = getattr(member, "value", member)
+            if str(val) == s:
+                return True
+    except Exception:
+        pass
+
+    # If TickSize is a module/class with constant attributes, check uppercase attrs
+    try:
+        for name in dir(TickSize):
+            if name.isupper():
+                if str(getattr(TickSize, name)) == s or name == s:
+                    return True
+    except Exception:
+        pass
+
+    # As a last resort, try constructing TickSize (works for some Enum implementations)
+    try:
+        TickSize(s)
+        return True
+    except Exception:
+        pass
+
+    return False

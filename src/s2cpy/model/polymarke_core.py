@@ -8,11 +8,11 @@ from py_builder_relayer_client.models import RelayerTxType
 from py_builder_signing_sdk.config import BuilderConfig
 from py_builder_signing_sdk.sdk_types import BuilderApiKeyCreds
 from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType, PartialCreateOrderOptions, OrderArgs, Side, \
-    OrderType, SignatureTypeV2, OrderPayload
+    OrderType, SignatureTypeV2
 from py_clob_client_v2.constants import POLYGON
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
-from s2cpy.exchange.polymarket_tools import asserts_by_market_id
+from s2cpy.exchange.polymarket_tools import asserts_by_market_id, is_valid_tick_size, convert_markets_2_assets
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
@@ -20,11 +20,11 @@ from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds, get_unix
 from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler, LiveData
 
 import asyncio
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, Any
 
 from loguru import logger
 
-from s2cpy.model.polymarket_io import MarketGetBySlugRequest
+from s2cpy.model.polymarket_io import MarketGetBySlugRequest, Market
 
 _CLOB_HOST = "https://clob.polymarket.com"
 _RELAYER_URL = "https://relayer-v2.polymarket.com"
@@ -101,13 +101,40 @@ class PolyLiquidityProviderAccount(Account):
          1. 动态的获得这个ticker(缓存机制)
          2. 判断asset是否存在，如果不存在。就更新
          3. 更新usdc的balance
+
+         FUTURE:
+         1. orderPriceMinTickSize变化时，自动更新
         :param kwargs:
         :return:
         """
+        if "market" not in kwargs:
+            raise ValueError("参数中没有market")
+        market: Market = kwargs["market"]
 
+        del kwargs["market"]
+
+        asset_id = kwargs["token_id"]
+        if asset_id not in self._asset:
+            # 主要是为了不把方法async的，而且觉得没必要那么慢
+            assets = convert_markets_2_assets(market)
+            for _id, asset in assets.items():
+                if _id == asset_id:
+                    position = Position(latest_price=0.0, quantity=0.0, avg_price=0.0)
+                    info = AssertInfo(asset=asset, position=position)
+                    self._asset[_id] = info
+
+        s = str(market.orderPriceMinTickSize)
+        if not is_valid_tick_size(s):
+            raise ValueError(f"market {market.slug}, orderPriceMinTickSize {s} is not valid")
         options = PartialCreateOrderOptions(
-            tick_size="0.001"
+            tick_size=s,
         )
+
+        side = kwargs["side"]
+        if side == Side.BUY:
+            cost = kwargs["price"] * kwargs["size"]
+            self._usdc_balance = self._usdc_balance - cost
+
         try:
             order = self._clob_client.create_and_post_order(
                 order_args=OrderArgs(

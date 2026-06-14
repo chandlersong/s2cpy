@@ -272,6 +272,7 @@ async def test_split_usdt():
     reqeust = MarketGetBySlugRequest(slug=slug)
     market = await gamma_api.get_market_by_slug(reqeust)
     logger.info(f"market: {market.conditionId}")
+
     account_config = cfg.get_default_account()
     account = PolyLiquidityProviderAccount(account_config)
     wallet_address = account_config.funder_address
@@ -280,3 +281,24 @@ async def test_split_usdt():
     condition_id = market.conditionId
     assert condition_id is not None, "market.conditionId should not be None when splitting pUSDT"
     split_pusdt(relay_client, condition_id, 1, wallet_address, deposit_wallet)
+
+
+@pytest.mark.manual
+async def test_split_usdt_neg_risk():
+    cfg = get_global_config()
+    setup_global_logging(cfg.log)
+    setup_global_logging(cfg.log)
+    event_slug = "how-many-fed-rate-cuts-in-2026"
+    api = RestfulAPI()
+    event = await api.get_event_by_slug(EventGetBySlugRequest.build(slug=event_slug))
+    logger.info(f"event id: {event.id},event_negRisk:{event.negRisk}")
+    zero_rate_cuts = event.markets[0]
+    logger.info(f"market slug : {zero_rate_cuts.slug},event_negRisk:{zero_rate_cuts.negRisk}")
+    account_config = cfg.get_default_account()
+    account = PolyLiquidityProviderAccount(account_config)
+    wallet_address = account_config.funder_address
+    relay_client = account._relay_client
+    deposit_wallet = account_config.deposit_wallet
+    condition_id = zero_rate_cuts.conditionId
+    assert condition_id is not None, "market.conditionId should not be None when splitting pUSDT"
+    split_pusdt(relay_client, condition_id, 1, wallet_address, deposit_wallet, is_neg_risk=zero_rate_cuts.negRisk)

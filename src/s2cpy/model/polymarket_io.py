@@ -9,12 +9,7 @@ import json
 from datetime import datetime
 from typing import Any, List, Optional
 
-from py_clob_client_v2 import ClobClient, BalanceAllowanceParams, AssetType
-from py_clob_client_v2.constants import POLYGON
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-
-from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
-from s2cpy.model.core_model import Account
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +161,7 @@ class Market(BaseModel):
     description: Optional[str] = None
     outcomes: Optional[List[str]] = None
     outcomePrices: Optional[List[float]] = None
+    negRisk: bool = None
 
     @field_validator("outcomes", mode="before")
     @classmethod
@@ -206,6 +202,7 @@ class Market(BaseModel):
                 return [float(p.strip()) for p in s.split(",") if p.strip()]
             return [float(s)]
         return v
+
     volume: Optional[str] = None
     active: Optional[bool] = None
     marketType: Optional[str] = None
@@ -656,8 +653,10 @@ class PositionsResponse(BaseModel):
                         if isinstance(inner, list):
                             return cls(positions=[TokenPosition.model_validate(item) for item in inner],
                                        pagination=Pagination.model_validate({
-                                           "hasMore": bool(data.get("hasMore") or mc.get("hasMore") or mc.get("has_more") ),
-                                           "totalResults": int(data.get("totalResults") or mc.get("total") or mc.get("totalResults") or mc.get("count") or 0)
+                                           "hasMore": bool(
+                                               data.get("hasMore") or mc.get("hasMore") or mc.get("has_more")),
+                                           "totalResults": int(data.get("totalResults") or mc.get("total") or mc.get(
+                                               "totalResults") or mc.get("count") or 0)
                                        }))
 
         raise TypeError("Unsupported /positions response format")
@@ -669,6 +668,7 @@ def parse_positions_response(data: Any) -> PositionsResponse:
     保持与其他 parse_*_response 助手一致的行为：接受 dict 或包含 data 包装的形式。
     """
     return PositionsResponse.from_api_response(data)
+
 
 def parse_to_json(data: Any) -> dict:
     return data
@@ -802,38 +802,38 @@ class ListMarketsRequest(BaseModel):
 
     @classmethod
     def build(
-        cls,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-        after_cursor: Optional[str] = None,
-        order: Optional[str] = None,
-        ascending: Optional[str] = None,
-        id: Optional[List[int]] = None,
-        slug: Optional[List[str]] = None,
-        clob_token_ids: Optional[List[str]] = None,
-        condition_ids: Optional[List[str]] = None,
-        market_maker_address: Optional[List[str]] = None,
-        liquidity_num_min: Optional[float] = None,
-        liquidity_num_max: Optional[float] = None,
-        volume_num_min: Optional[float] = None,
-        volume_num_max: Optional[float] = None,
-        start_date_min: Optional[int] = None,
-        start_date_max: Optional[int] = None,
-        end_date_min: Optional[int] = None,
-        end_date_max: Optional[int] = None,
-        tag_id: Optional[int] = None,
-        related_tags: Optional[bool] = None,
-        exclude_tag_id: Optional[List[int]] = None,
-        active: Optional[bool] = None,
-        closed: Optional[bool] = None,
-        cyom: Optional[bool] = None,
-        uma_resolution_status: Optional[str] = None,
-        game_id: Optional[str] = None,
-        sports_market_types: Optional[List[str]] = None,
-        rewards_min_size: Optional[float] = None,
-        question_ids: Optional[List[str]] = None,
-        include_tag: Optional[bool] = None,
-        uma_resolution_statuses: Optional[str] = None,
+            cls,
+            limit: Optional[int] = None,
+            offset: Optional[int] = None,
+            after_cursor: Optional[str] = None,
+            order: Optional[str] = None,
+            ascending: Optional[str] = None,
+            id: Optional[List[int]] = None,
+            slug: Optional[List[str]] = None,
+            clob_token_ids: Optional[List[str]] = None,
+            condition_ids: Optional[List[str]] = None,
+            market_maker_address: Optional[List[str]] = None,
+            liquidity_num_min: Optional[float] = None,
+            liquidity_num_max: Optional[float] = None,
+            volume_num_min: Optional[float] = None,
+            volume_num_max: Optional[float] = None,
+            start_date_min: Optional[int] = None,
+            start_date_max: Optional[int] = None,
+            end_date_min: Optional[int] = None,
+            end_date_max: Optional[int] = None,
+            tag_id: Optional[int] = None,
+            related_tags: Optional[bool] = None,
+            exclude_tag_id: Optional[List[int]] = None,
+            active: Optional[bool] = None,
+            closed: Optional[bool] = None,
+            cyom: Optional[bool] = None,
+            uma_resolution_status: Optional[str] = None,
+            game_id: Optional[str] = None,
+            sports_market_types: Optional[List[str]] = None,
+            rewards_min_size: Optional[float] = None,
+            question_ids: Optional[List[str]] = None,
+            include_tag: Optional[bool] = None,
+            uma_resolution_statuses: Optional[str] = None,
     ) -> "ListMarketsRequest":
         """Build helper to improve IDE discoverability when constructing request params."""
         return cls(
@@ -971,7 +971,7 @@ class MarketGetBySlugRequest(BaseModel):
     @classmethod
     def build(cls, slug: str, optimized: Optional[bool] = None,
               include_tag: Optional[bool] = None) -> "MarketGetBySlugRequest":
-        return cls(slug=slug,include_tag=include_tag)
+        return cls(slug=slug, include_tag=include_tag)
 
 
 class MarketGetByIdRequest(BaseModel):
@@ -1061,8 +1061,3 @@ def parse_market_response(data: Any) -> Market | list[Market]:
         return Market.model_validate(data)
 
     raise TypeError("Unsupported market response format")
-
-
-
-
-
