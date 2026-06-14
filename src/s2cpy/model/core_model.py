@@ -15,6 +15,7 @@ from typing import Protocol, Optional, Callable, Any, List
 @dataclasses.dataclass
 class Order:
     id: str
+    asset_id: str
     side: int  # 1:long/buy -1:short/sell
     quantity: float
     quantity_match: float

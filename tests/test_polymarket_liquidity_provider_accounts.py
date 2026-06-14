@@ -442,6 +442,16 @@ async def test_create_order_exception_flow(mock_clob_cls):
         }
         account.create_order(**arg)
 
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_orders_by_asset_empty(mock_clob_cls):
+    """
+    orders_by_asset should return an empty dict when there are no open orders.
+    """
+    account = create_mock_account(mock_clob_cls)
+    account._open_orders = {}
+    grouped = account.orders_by_asset
+    assert grouped == {}
+
     with pytest.raises(ValueError, match="market test, orderPriceMinTickSize 0.2 is not valid"):
         market = MagicMock()
         market.orderPriceMinTickSize = "0.2"
@@ -454,3 +464,27 @@ async def test_create_order_exception_flow(mock_clob_cls):
             "market": market,
         }
         account.create_order(**arg)
+
+@patch("s2cpy.model.polymarke_core.ClobClient")
+async def test_orders_by_asset_grouping(mock_clob_cls):
+    """
+    Ensure orders_by_asset groups open orders by their assert_id correctly.
+    """
+    account = create_mock_account(mock_clob_cls)
+    from s2cpy.model.core_model import Order
+
+    o1 = Order(id="o1", asset_id="a1", side=1, quantity=5, quantity_match=0, price=1.0, status="OPEN")
+    o2 = Order(id="o2", asset_id="a1", side=-1, quantity=2, quantity_match=0, price=2.0, status="OPEN")
+    o3 = Order(id="o3", asset_id="a2", side=1, quantity=1, quantity_match=0, price=3.0, status="OPEN")
+
+    account._open_orders = {"o1": o1, "o2": o2, "o3": o3}
+
+    grouped = account.orders_by_asset
+
+    assert set(grouped.keys()) == {"a1", "a2"}
+    assert len(grouped["a1"]) == 2
+    assert o1 in grouped["a1"] and o2 in grouped["a1"]
+    assert len(grouped["a2"]) == 1 and grouped["a2"][0] is o3
+
+
+

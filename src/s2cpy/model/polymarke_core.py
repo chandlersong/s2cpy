@@ -20,7 +20,7 @@ from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds, get_unix
 from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler, LiveData
 
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from loguru import logger
 
@@ -114,6 +114,14 @@ class PolyLiquidityProviderAccount(Account):
         del kwargs["market"]
 
         asset_id = kwargs["token_id"]
+        s = str(market.orderPriceMinTickSize)
+        # Validate tick size first to avoid making other API/IO calls that
+        # may access additional market attributes (like endDate) on the
+        # provided `market` object. Tests expect an invalid tick size to raise
+        # a ValueError early.
+        if not is_valid_tick_size(s):
+            raise ValueError(f"market {market.slug}, orderPriceMinTickSize {s} is not valid")
+
         if asset_id not in self._asset:
             # 主要是为了不把方法async的，而且觉得没必要那么慢
             assets = convert_markets_2_assets(market)
@@ -122,10 +130,6 @@ class PolyLiquidityProviderAccount(Account):
                     position = Position(latest_price=0.0, quantity=0.0, avg_price=0.0)
                     info = AssertInfo(asset=asset, position=position)
                     self._asset[_id] = info
-
-        s = str(market.orderPriceMinTickSize)
-        if not is_valid_tick_size(s):
-            raise ValueError(f"market {market.slug}, orderPriceMinTickSize {s} is not valid")
         options = PartialCreateOrderOptions(
             tick_size=s,
         )
@@ -214,11 +218,32 @@ class PolyLiquidityProviderAccount(Account):
             template.format(name=account_name) for template in POLYMARKET_ACCOUNT_TOPICS.values()
         ]
 
+    @property
+    def orders_by_asset(self) -> Dict[str, List[Order]]:
+        """
+        根据order的asset_id的区别，把相同的asset_id的order放入list。最后组成一个list返回
+        :return:
+        """
+        # Only consider the Order.asset_id attribute (previously there was
+        # some handling for an alternative name like `assert_id`). The codebase
+        # uses `asset_id` on the Order dataclass, so keep behavior simple and
+        # strict: group open orders by their `asset_id` value and ignore any
+        # orders that don't have one.
+        grouped: Dict[str, List[Order]] = {}
+        for order in self._open_orders.values():
+            aid = order.asset_id
+            if aid is None:
+                # skip orders without an asset identifier
+                continue
+            grouped.setdefault(aid, []).append(order)
+
+        return grouped
+
     def get_topic(self, topic: str) -> str:
         return POLYMARKET_ACCOUNT_TOPICS[topic].format(name=self._config.name)
 
     @property
-    def asset_dict(self) -> Dict[Asset, Position]:
+    def asset_dict(self) -> dict[str, AssertInfo]:
         return self._asset
 
     @property
@@ -302,7 +327,7 @@ class PolyLiquidityProviderAccount(Account):
             side = 1 if o["side"] == "BUY" else -1
             id_: str = o["id"]
             order = Order(id=id_, side=side, quantity=o["original_size"], quantity_match=o["size_matched"],
-                          status=o["status"], price=o["price"], extra_info=o)
+                          status=o["status"], price=o["price"], extra_info=o, asset_id=o["assert_id"])
             self._open_orders[id_] = order
 
     async def _query_positions(self):
@@ -473,14 +498,15 @@ class PolyLiquidityProviderAccount(Account):
         order_type = data["type"]
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
         export_folder = Path("/app/examples")
-        asset_info = self._asset[data["asset_id"]]
+        if export_folder.exists():
+            pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+
+        asset_id = data["asset_id"]
+        asset_info = self._asset[asset_id]
         price = float(data["price"])
         quantity = float(data["size_matched"])
         id_: str = data["id"]
         side = 1 if data["side"] == "BUY" else -1
-        if export_folder.exists():
-            pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
-
         if order_type == "CANCELLATION":
             id_: str = data["id"]
             if id_ in self._open_orders:
@@ -495,7 +521,7 @@ class PolyLiquidityProviderAccount(Account):
             self._handler(topic, live_data)
         elif order_type == "UPDATE":
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
-                          status=data["type"], price=data["price"], extra_info=data)
+                          status=data["type"], price=data["price"], extra_info=data, asset_id=asset_id)
             self._open_orders[id_] = order
             if side == 1:
                 position = asset_info.position
@@ -515,3 +541,7 @@ class PolyLiquidityProviderAccount(Account):
             topic = self.get_topic("order_update")
             live_data = LiveData(topic=topic, asset=asset_info.asset, data=data)
             self._handler(topic, live_data)
+        elif order_type == "PLACEMENT":
+            order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
+                          status=data["type"], price=data["price"], extra_info=data, asset_id=asset_id)
+            self._open_orders[id_] = order
