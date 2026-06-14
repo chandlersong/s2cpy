@@ -229,7 +229,7 @@ class PolyLiquidityProviderAccount(Account):
         # uses `asset_id` on the Order dataclass, so keep behavior simple and
         # strict: group open orders by their `asset_id` value and ignore any
         # orders that don't have one.
-        grouped: Dict[str, List[Order]] = {}
+        grouped: Dict[str, List[Order]] = collections.defaultdict(list)
         for order in self._open_orders.values():
             aid = order.asset_id
             if aid is None:
