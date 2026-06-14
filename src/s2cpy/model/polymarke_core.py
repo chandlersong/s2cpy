@@ -203,6 +203,10 @@ class PolyLiquidityProviderAccount(Account):
     def name(self):
         return self._config.name
 
+    @property
+    def asset(self) -> Dict[str, AssertInfo]:
+        return self._asset
+
     def supported_data_list(self) -> list[str]:
 
         account_name = self._config.name

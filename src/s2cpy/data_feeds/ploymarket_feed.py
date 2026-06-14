@@ -167,6 +167,7 @@ class OneMarketDataFeed(DataFeed):
         return [
             template.format(name=key) for template in POLYMARKET_DATA_FEED_TOPICS.values()
         ]
+
     async def start(self):
         """
         :return:
@@ -206,25 +207,29 @@ class OneMarketDataFeed(DataFeed):
         re-raise the CancelledError; on normal exit it ensures the ws is
         closed.
         """
-        ws: Optional[PolymarketWS] = None
+
+        # Connect, then wait one day between rotations. On cancellation
+        # ensure the websocket is closed and re-raise the CancelledError.
+        ws = await self.start_listening()
+
         try:
+            # rotate once every 24 hours
+            one_day_seconds = 24 * 60 * 60
             while True:
-                ws = await self.start_listening()
                 try:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(one_day_seconds)
                 except asyncio.CancelledError:
-                    # on cancellation ensure websocket is closed then re-raise
-                    if ws is not None:
-                        await ws.close()
+                    # Ensure websocket closed on cancellation and propagate
+                    await ws.close()
                     raise
 
-                # rotate connection
-                if ws is not None:
-                    await ws.close()
+                # Time to rotate the connection: close current ws and start a new one
+                await ws.close()
+                ws = await self.start_listening()
 
         finally:
-            if ws is not None:
-                await ws.close()
+            # Ensure websocket closed on normal exit as well
+            await ws.close()
 
     def subscribe(self, handler: DataHandler):
         self._handler = handler
