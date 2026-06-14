@@ -431,7 +431,8 @@ async def test_create_order_exception_flow(mock_clob_cls):
     """
     account = create_mock_account(mock_clob_cls)
     account._usdc_balance = 10
-
+    asset_info = MagicMock()
+    account._asset = {"1234567890": asset_info}
     with pytest.raises(ValueError, match="参数中没有market"):
         arg = {
             "token_id": "1234567890",
