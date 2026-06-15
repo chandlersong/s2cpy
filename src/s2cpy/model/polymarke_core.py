@@ -352,7 +352,7 @@ class PolyLiquidityProviderAccount(Account):
             logger.info(f"{acc_config.name} 下没有仓位")
         else:
             for position in positions:
-                asset_id = f"{position.slug}-{position.outcome}"
+                asset_id = position.asset
                 market_slug = position.slug
                 if market_slug is None or position.asset is None:
                     logger.error(f"{position.slug}不存在，数据问题")
