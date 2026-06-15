@@ -156,7 +156,8 @@ class PolyLiquidityProviderAccount(Account):
         for order in self._open_orders.values():
             if order.asset_id == asset_id:
                 order_ids.append(order.id)
-        self.cancel_order(order_ids)
+        if len(order_ids) != 0:
+            self.cancel_order(order_ids)
 
     def cancel_order(self, order_ids: list[str]):
         self._clob_client.cancel_orders(order_ids)
