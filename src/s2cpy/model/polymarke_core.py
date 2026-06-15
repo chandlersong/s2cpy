@@ -431,7 +431,10 @@ class PolyLiquidityProviderAccount(Account):
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
         export_folder = Path("/app/records")
         if export_folder.exists():
-            pickle.dump(data, open(export_folder / f'trade_{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+            try:
+                pickle.dump(data, open(export_folder / f'trade_{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+            except Exception as e:
+                logger.error(f"序列化的时候出错:{e}")
         refresh_position = True
         price = float(data["price"])
         quantity = float(data["size"])
@@ -498,7 +501,10 @@ class PolyLiquidityProviderAccount(Account):
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
         export_folder = Path("/app/records")
         if export_folder.exists():
-            pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+            try:
+                pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+            except Exception as e:
+                logger.error(f"序列化的时候出错:{e}")
         else:
             logger.warning(f"{export_folder} does not exist")
 
