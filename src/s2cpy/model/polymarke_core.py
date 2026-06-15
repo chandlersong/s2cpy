@@ -498,6 +498,8 @@ class PolyLiquidityProviderAccount(Account):
         export_folder = Path("/app/records")
         if export_folder.exists():
             pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
+        else:
+            logger.warning(f"{export_folder} does not exist")
 
         asset_id = data["asset_id"]
         asset_info = self._asset[asset_id]
