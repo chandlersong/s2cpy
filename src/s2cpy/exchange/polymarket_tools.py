@@ -4,7 +4,7 @@
 import os
 
 import time
-from typing import Dict, get_args
+from typing import Dict, get_args, Any
 
 from eth_abi import encode
 from eth_utils import keccak, to_checksum_address
@@ -192,6 +192,7 @@ async def asserts_by_market_id(market_id: str) -> Dict[str, Asset]:
     market = await api.get_market_by_id(MarketGetByIdRequest(id=market_id))
     return convert_markets_2_assets(market)
 
+
 def is_valid_tick_size(s: str) -> bool:
     # First, if TickSize is a typing.Literal (common in py_clob_client_v2),
     # `get_args(TickSize)` returns the allowed literal values at runtime.
@@ -230,3 +231,12 @@ def is_valid_tick_size(s: str) -> bool:
         pass
 
     return False
+
+
+def create_order_args(asset: Asset, price: float, size: float, side: int) -> Dict[str, Any]:
+    return {
+        "token_id": asset.external_id,
+        "price": price,
+        "size": size,
+        "side": side
+    }

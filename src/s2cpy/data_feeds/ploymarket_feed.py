@@ -110,6 +110,7 @@ class CryptoRepeatDataFeed(DataFeed):
 
     def _on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
+        # TODO:处理tick_size_change事件
         if event_type in self.EVENT_LIST:
             key = self.domain_key
             asset_id = data["asset_id"]
@@ -236,6 +237,7 @@ class OneMarketDataFeed(DataFeed):
 
     def _on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
+        # TODO:处理tick_size_change事件
         if event_type in self.EVENT_LIST:
             key = self.name
             asset_id = data["asset_id"]
