@@ -150,6 +150,14 @@ class PolyLiquidityProviderAccount(Account):
         except Exception as e:
             logger.error(f"Create order error: {e}")
 
+    def cancel_order_by_asset(self, asset: Asset):
+        order_ids = []
+        asset_id = asset.external_id
+        for order in self._open_orders.values():
+            if order.asset_id == asset_id:
+                order_ids.append(order.id)
+        self.cancel_order(order_ids)
+
     def cancel_order(self, order_ids: list[str]):
         self._clob_client.cancel_orders(order_ids)
 
