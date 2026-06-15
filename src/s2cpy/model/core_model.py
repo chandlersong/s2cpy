@@ -3,8 +3,6 @@
 """
 import abc
 import dataclasses
-import time
-from copy import deepcopy
 from typing import Protocol, Optional, Callable, Any, List
 
 """
@@ -43,6 +41,7 @@ class Asset:
     2. 加入一些字段，方便实盘的统计
     """
     identify: str
+    mini_ticker_size: float = None
     external_id: Optional[str] = None
     validate_before: Optional[int] = None  # None代表永久有效，UTC的unix timestamp。精确到毫秒
     extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
@@ -153,11 +152,12 @@ class Account(Protocol):
         """
         pass
 
-    def create_order(self, **kwargs) -> Optional[str]:
+    def create_order(self, asset: Asset, **kwargs) -> Optional[str]:
         """
         placeHolder的方法，因为要支持多交易所的支持。
         过早的统一参数，太麻烦。
         所以暂时负责每隔交易所单独的参数
+        :param asset: 交易的标的物
         :param kwargs: 各个交易所自己独立的参数
         :return: order_id
         """

@@ -176,11 +176,11 @@ def convert_markets_2_assets(market: Market) -> Dict[str, Asset]:
         result[token_id] = Asset(
             identify=f"{slug}-{outcomes[index]}",
             external_id=token_id,
+            mini_ticker_size=float(market.orderPriceMinTickSize or 0.01),
             validate_before=validate_before,
             extra_info={"market": market},
         )
     return result
-
 
 async def asserts_by_market_id(market_id: str) -> Dict[str, Asset]:
     """

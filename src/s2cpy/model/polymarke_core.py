@@ -57,6 +57,11 @@ POLYMARKET_ACCOUNT_TOPICS = {
 
 @dataclasses.dataclass
 class AssertInfo:
+    """
+    最理想的状态是。在data feed阶段，产生，然后在那个阶段做流转。
+    但是实际情况是一层，都有同步的需求。
+    所以暂时先这么考虑吧。
+    """
     asset: Asset
     position: Position
 
@@ -95,7 +100,7 @@ class PolyLiquidityProviderAccount(Account):
 
     """
 
-    def create_order(self, **kwargs) -> Optional[str]:
+    def create_order(self, asset: Asset, **kwargs) -> Optional[str]:
         """
          TODO：
          1. 动态的获得这个ticker(缓存机制)
@@ -104,35 +109,27 @@ class PolyLiquidityProviderAccount(Account):
 
          FUTURE:
          1. orderPriceMinTickSize变化时，自动更新
+        :param asset: 交易标的
         :param kwargs:
         :return:
         """
-        if "market" not in kwargs:
-            raise ValueError("参数中没有market")
-        market: Market = kwargs["market"]
-
-        del kwargs["market"]
-
-        asset_id = kwargs["token_id"]
-        s = str(market.orderPriceMinTickSize)
+        s = str(asset.mini_ticker_size)
         # Validate tick size first to avoid making other API/IO calls that
         # may access additional market attributes (like endDate) on the
         # provided `market` object. Tests expect an invalid tick size to raise
         # a ValueError early.
         if not is_valid_tick_size(s):
-            raise ValueError(f"market {market.slug}, orderPriceMinTickSize {s} is not valid")
-
-        if asset_id not in self._asset:
-            # 主要是为了不把方法async的，而且觉得没必要那么慢
-            assets = convert_markets_2_assets(market)
-            for _id, asset in assets.items():
-                if _id == asset_id:
-                    position = Position(latest_price=0.0, quantity=0.0, avg_price=0.0)
-                    info = AssertInfo(asset=asset, position=position)
-                    self._asset[_id] = info
+            raise ValueError(f"asset {asset.identify}, orderPriceMinTickSize {s} is not valid")
         options = PartialCreateOrderOptions(
             tick_size=s,
         )
+        asset_id = asset.external_id
+        if asset_id is None:
+            raise ValueError(f"asset {asset.identify}, has no asset id")
+        if asset_id not in self._asset:
+            position = Position(latest_price=0.0, quantity=0.0, avg_price=0.0)
+            info = AssertInfo(asset=asset, position=position)
+            self._asset[asset_id] = info
 
         side = kwargs["side"]
         if side == Side.BUY:
@@ -450,46 +447,29 @@ class PolyLiquidityProviderAccount(Account):
         orders = self.orders_group_by_asset[asset_id]
         # TODO:监控代码，确认后去掉
         logger.info(f"{asset_id}，trade type:{trade_type}，现有orders:{len(orders)}")
-        asset = None
-        if asset_id not in self._asset:
-            """
-            polymarket没有合约，不可能卖空。所以第一笔交易必然是买的。
-            """
-            market_id = data["market"]
-            logger.info(f"新的交易的asset:{asset_id},不存在缓存中，开始更新，market_id:{market_id}")
-            assets = await asserts_by_market_id(market_id)
-            if refresh_position:
-                for k, v in assets.items():
-                    if k == asset_id:
-                        position = Position(latest_price=price, quantity=quantity, avg_price=price)
-                        info = AssertInfo(asset=v, position=position)
-                        self._asset[k] = info
-                        asset = v
-                        break
-                if asset is None:
-                    logger.error(f"assert:{asset_id}，market{market_id},没有在polymarket上找到，请检查")
-                    # TODO:加入到通知用户环节，为的是保护用户
-                    return
-        else:
-            side = 1 if data["side"] == "BUY" else -1
-            info = self._asset[asset_id]
-            asset = info.asset
-            if refresh_position:
-                if side == 1:
-                    p = info.position
-                    total_cost = price * quantity + p.quantity * p.avg_price
-                    p.latest_price = price
-                    p.quantity = quantity + p.quantity
-                    p.avg_price = total_cost / p.quantity
-                else:
-                    p = info.position
-                    total_cost = p.quantity * p.avg_price - price * quantity
-                    p.latest_price = price
-                    p.quantity = p.quantity - quantity
-                    p.avg_price = total_cost / p.quantity
-                    if p.quantity < 0:
-                        # 算是一个错误处理吧。
-                        asyncio.create_task(self.sync_account_position())
+
+        side = 1 if data["side"] == "BUY" else -1
+        info = self._asset[asset_id]
+        if info is None:
+            # 应该在order之前就是初始化了。
+            raise ValueError(f"trade的asset_id:{asset_id}，在账户的asset_dict中没有找到，请检查")
+        asset = info.asset
+        if refresh_position:
+            if side == 1:
+                p = info.position
+                total_cost = price * quantity + p.quantity * p.avg_price
+                p.latest_price = price
+                p.quantity = quantity + p.quantity
+                p.avg_price = total_cost / p.quantity
+            else:
+                p = info.position
+                total_cost = p.quantity * p.avg_price - price * quantity
+                p.latest_price = price
+                p.quantity = p.quantity - quantity
+                p.avg_price = total_cost / p.quantity
+                if p.quantity < 0:
+                    # 算是一个错误处理吧。
+                    asyncio.create_task(self.sync_account_position())
 
         live_data = LiveData(topic=topic, asset=asset, data=data)
         self._handler(topic, live_data)
