@@ -428,7 +428,7 @@ class PolyLiquidityProviderAccount(Account):
         """
         trade_type = data["status"]
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
-        export_folder = Path("/app/examples")
+        export_folder = Path("/app/records")
         if export_folder.exists():
             pickle.dump(data, open(export_folder / f'trade_{trade_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
         refresh_position = True
@@ -495,7 +495,7 @@ class PolyLiquidityProviderAccount(Account):
         """
         order_type = data["type"]
         # TODO: 下面代码，纯粹是为了收集数据。正式版后请删除
-        export_folder = Path("/app/examples")
+        export_folder = Path("/app/records")
         if export_folder.exists():
             pickle.dump(data, open(export_folder / f'order_{order_type}_{get_unix_seconds_utc()}.pkl', 'wb'))
 
