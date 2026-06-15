@@ -1,6 +1,7 @@
 import collections
 import dataclasses
 import pickle
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from py_builder_relayer_client.client import RelayClient
@@ -408,14 +409,14 @@ class PolyLiquidityProviderAccount(Account):
         return ws
 
     def on_web_socket_message(self, data: Dict[str, Any]):
-        logger.debug(f"PolyMarket:WebSocket message: {data}")
         event_type = data["event_type"]
+        logger.debug(f"PolyMarket:User WebSocket message receive {event_type}")
         if event_type == "order":  # 处理订单逻辑
             self.on_web_socket_order(data)
         elif event_type == "trade":  # 处理交易逻辑
-            asyncio.run(self.on_web_socket_trade(data))
+            self.on_web_socket_trade(data)
 
-    async def on_web_socket_trade(self, data: Dict[str, Any]):
+    def on_web_socket_trade(self, data: Dict[str, Any]):
         """
         [官方资料](https://docs.polymarket.com/market-data/websocket/user-channel#trade)
         1. 根据资料，整个trade有五个，为了简化，只把failed和confirm做处理。
@@ -552,3 +553,16 @@ class PolyLiquidityProviderAccount(Account):
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
                           status=data["type"], price=data["price"], extra_info=data, asset_id=asset_id)
             self._open_orders[id_] = order
+
+    def sync_account_position_backend(self):
+        logger.debug("🚀 sync_account_position_backend 开始")
+        try:
+            asyncio.run(self.sync_account_position())
+        except RuntimeError as e:
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                with ThreadPoolExecutor() as pool:
+                    pool.submit(lambda: asyncio.run(self.sync_account_position())).result()
+            else:
+                logger.error("其他错误:", e)
+        except Exception as e:
+            logger.error("其他异常:", type(e).__name__, str(e))
