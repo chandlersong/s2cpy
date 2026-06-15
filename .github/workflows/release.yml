@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout 代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 打包源码为 zip (zip file)
         run: zip -r s2cpy-${{ inputs.tag }}.zip . -x ".git/*"
