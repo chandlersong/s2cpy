@@ -47,7 +47,7 @@ async def test_trade_buy(mock_clob_cls):
     position = Position(latest_price=1, quantity=5, avg_price=5)
     asset = MagicMock()
     account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
-    await account.on_web_socket_trade(data)
+    account.on_web_socket_trade(data)
 
     assets = account._asset
 
@@ -99,7 +99,7 @@ async def test_trade_sell(mock_clob_cls):
     position = Position(latest_price=1, quantity=20, avg_price=5)
     asset = MagicMock()
     account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
-    await account.on_web_socket_trade(data)
+    account.on_web_socket_trade(data)
 
     assets = account._asset
 
@@ -152,7 +152,7 @@ async def test_trade_fail(mock_clob_cls):
     position = Position(latest_price=1, quantity=20, avg_price=5)
     asset = MagicMock()
     account._asset = {"1234567890": AssertInfo(asset=asset, position=position)}
-    await account.on_web_socket_trade(data)
+    account.on_web_socket_trade(data)
 
     assets = account._asset
 
