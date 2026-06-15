@@ -324,7 +324,7 @@ class PolyLiquidityProviderAccount(Account):
             side = 1 if o["side"] == "BUY" else -1
             id_: str = o["id"]
             order = Order(id=id_, side=side, quantity=o["original_size"], quantity_match=o["size_matched"],
-                          status=o["status"], price=o["price"], extra_info=o, asset_id=o["assert_id"])
+                          status=o["status"], price=o["price"], extra_info=o, asset_id=o["asset_id"])
             self._open_orders[id_] = order
 
     async def _query_positions(self):
