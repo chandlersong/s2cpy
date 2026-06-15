@@ -410,7 +410,7 @@ class PolyLiquidityProviderAccount(Account):
 
     def on_web_socket_message(self, data: Dict[str, Any]):
         event_type = data["event_type"]
-        logger.debug(f"PolyMarket:User WebSocket message receive {event_type}")
+        logger.debug(f"PolyMarket:User WebSocket message receive {event_type},data is {data}")
         if event_type == "order":  # 处理订单逻辑
             self.on_web_socket_order(data)
         elif event_type == "trade":  # 处理交易逻辑
