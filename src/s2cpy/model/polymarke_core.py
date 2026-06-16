@@ -329,6 +329,7 @@ class PolyLiquidityProviderAccount(Account):
         self._usdc_balance = usdc_balance
 
     async def _query_open_orders(self):
+        self._open_orders.clear()
         open_orders = self._clob_client.get_open_orders()
         for o in open_orders:
             side = 1 if o["side"] == "BUY" else -1
