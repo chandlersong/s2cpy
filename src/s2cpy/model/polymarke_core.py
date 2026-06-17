@@ -355,6 +355,7 @@ class PolyLiquidityProviderAccount(Account):
         response = await gramma_api.positions(acc_config.funder_address)
         positions = response.positions
         market_cache = collections.defaultdict()
+        assets = dict()
         if positions is None or len(positions) == 0:
             logger.info(f"{acc_config.name} 下没有仓位")
         else:
@@ -386,7 +387,10 @@ class PolyLiquidityProviderAccount(Account):
                     continue
                 position = Position(latest_price=position.curPrice, quantity=position.size, avg_price=position.avgPrice,
                                     extra_info=position.to_dict())
-                self._asset[asset_id] = AssertInfo(asset=asset, position=position)
+                assets[asset_id] = AssertInfo(asset=asset, position=position)
+        logger.info(
+            f"开始同步asset的position，原来有position的asset数量为{len(self._asset)},需要同步的position的asset数量为{len(assets)}")
+        self._asset = assets
 
     def stop_sync(self) -> None:
         """Cancel the periodic background sync task if running."""
