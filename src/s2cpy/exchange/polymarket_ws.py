@@ -174,7 +174,8 @@ class PolymarketWS:
                 for command in self._commands_on_reconnect:
                     logger.info(f"sending command {command} at reconnect")
                     await self._ws.send_str(command)
-                logger.info(f"reconnected after {attempts} attempts,handler num:{len(self._handlers)}")
+                logger.info(
+                    f"reconnected after {attempts} attempts,handler num:{len(self._handlers)},resend command num:{len(self._commands_on_reconnect)}")
                 return
             except Exception:
                 logger.exception(f"reconnect attempt {attempts} failed", )
