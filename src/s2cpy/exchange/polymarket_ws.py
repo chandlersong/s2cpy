@@ -29,7 +29,7 @@ class PolymarketWS:
             self,
             url: str,
             session: Optional[aiohttp.ClientSession] = None,
-            heartbeat_interval: float = 9.5, #要求是10s，9.5s保险
+            heartbeat_interval: float = 9.5,  # 要求是10s，9.5s保险
             reconnect_attempts: Optional[int] = 5,
     ):
         self.url = url
@@ -168,7 +168,7 @@ class PolymarketWS:
                 self._connected.set()
                 self._recv_task = asyncio.create_task(self._reader_loop())
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-                logger.info(f"reconnected after {attempts} attempts")
+                logger.info(f"reconnected after {attempts} attempts,handler num:{len(self._handlers)}")
                 return
             except Exception:
                 logger.exception(f"reconnect attempt {attempts} failed", )
