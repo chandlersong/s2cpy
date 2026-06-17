@@ -329,14 +329,19 @@ class PolyLiquidityProviderAccount(Account):
         self._usdc_balance = usdc_balance
 
     async def _query_open_orders(self):
-        self._open_orders.clear()
+        logger.debug("🚀 sync_account_position_backend _query_open_orders 开始")
+        sync_orders = {}
         open_orders = self._clob_client.get_open_orders()
         for o in open_orders:
             side = 1 if o["side"] == "BUY" else -1
             id_: str = o["id"]
             order = Order(id=id_, side=side, quantity=o["original_size"], quantity_match=o["size_matched"],
                           status=o["status"], price=o["price"], extra_info=o, asset_id=o["asset_id"])
-            self._open_orders[id_] = order
+            sync_orders[id_] = order
+        logger.debug(f"🚀 置换内部的orders，原始为{len(self._open_orders)},需要置换为{len(sync_orders)}")
+        self._open_orders.clear()
+        self._open_orders.update(sync_orders)
+        logger.debug(f"🚀 置换后的orders，account订单为{len(self._open_orders)}")
 
     async def _query_positions(self):
         """
@@ -394,7 +399,7 @@ class PolyLiquidityProviderAccount(Account):
         logger.info(f"PolyMarket:Listening account for {config.name}")
         url = "wss://ws-subscriptions-clob.polymarket.com/ws/user"  # public echo service (manual only)
         ws = PolymarketWS(url, reconnect_attempts=2)
-        ws.register_handler("default", self.on_web_socket_message)
+        ws.register_handler(self.on_web_socket_message)
         await ws.connect()
         creds = self._api_creds
         sub = {
@@ -450,24 +455,27 @@ class PolyLiquidityProviderAccount(Account):
             # 其他的topic暂时先不弄了。
             return
         maker_orders = data['maker_orders']
-        for maker_order in maker_orders:
-            order_id = maker_order["order_id"]
-            if order_id in self._open_orders:
-                del self._open_orders[order_id]
-            else:
-                # TODO:监控代码，确认后去掉
-                logger.warning(f"trade的maker_order:{order_id}，在open_orders中没有找到，请检查")
         asset_id = data["asset_id"]
-        orders = self.orders_group_by_asset[asset_id]
-        # TODO:监控代码，确认后去掉
-        logger.info(f"{asset_id}，trade type:{trade_type}，现有orders:{len(orders)}")
-
-        side = 1 if data["side"] == "BUY" else -1
         info = self._asset[asset_id]
         if info is None:
             # 应该在order之前就是初始化了。
             raise ValueError(f"trade的asset_id:{asset_id}，在账户的asset_dict中没有找到，请检查")
         asset = info.asset
+        for maker_order in maker_orders:
+            order_id = maker_order["order_id"]
+            if order_id in self._open_orders:
+                del self._open_orders[order_id]
+                logger.warning(
+                    f"asset:{asset.identify}trade,id:{data['id']},status:{trade_type},的maker_order:{order_id}被从内部订单清除")
+            else:
+                # TODO:监控代码，确认后去掉
+                logger.warning(f"trade的maker_order:{order_id}，在open_orders中没有找到，请检查")
+        orders = self.orders_group_by_asset[asset_id]
+        # TODO:监控代码，确认后去掉
+        logger.info(f"{asset_id}，trade type:{trade_type}，现有orders:{len(orders)}")
+
+        side = 1 if data["side"] == "BUY" else -1
+
         if refresh_position:
             if side == 1:
                 p = info.position

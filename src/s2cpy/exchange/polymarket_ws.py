@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, Callable, Optional, Dict, List
+from typing import Any, Callable, Optional, List
 
 import aiohttp
 from loguru import logger
@@ -40,7 +40,8 @@ class PolymarketWS:
         self._reconnect_attempts = reconnect_attempts
         self._recv_task: Optional[asyncio.Task] = None
         self._heartbeat_task: Optional[asyncio.Task] = None
-        self._handlers: Dict[str, List[MessageHandler]] = {}
+        # Use a simple list of handlers (no topic/type routing)
+        self._handlers: List[MessageHandler] = []
         self._closed = asyncio.Event()
         self._connected = asyncio.Event()
 
@@ -106,8 +107,9 @@ class PolymarketWS:
             logger.exception("invalid ws json")
             return
 
-        key = payload.get("type") or payload.get("topic") or "default"
-        handlers = list(self._handlers.get(key, [])) + list(self._handlers.get("default", []))
+        # Dispatch payload to all registered handlers. We no longer route by
+        # `topic` and simply deliver every message to every handler.
+        handlers = list(self._handlers)
         for h in handlers:
             asyncio.create_task(self._maybe_call(h, payload))
 
@@ -136,8 +138,13 @@ class PolymarketWS:
         data = obj if isinstance(obj, str) else json.dumps(obj)
         await self._ws.send_str(data)
 
-    def register_handler(self, key: str, handler: MessageHandler):
-        self._handlers.setdefault(key, []).append(handler)
+    def register_handler(self, handler: MessageHandler):
+        """Register a handler to receive all incoming messages.
+
+        Previously handlers were keyed by topic/type. Handlers are now a
+        flat list and will receive every message.
+        """
+        self._handlers.append(handler)
 
     async def close(self):
         self._closed.set()
@@ -161,8 +168,8 @@ class PolymarketWS:
                 self._connected.set()
                 self._recv_task = asyncio.create_task(self._reader_loop())
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-                logger.info("reconnected after %d attempts", attempts)
+                logger.info(f"reconnected after {attempts} attempts")
                 return
             except Exception:
-                logger.exception("reconnect attempt %d failed", attempts)
+                logger.exception(f"reconnect attempt {attempts} failed", )
                 await asyncio.sleep(min(2 ** attempts, 30))
