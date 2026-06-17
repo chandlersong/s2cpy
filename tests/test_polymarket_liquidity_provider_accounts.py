@@ -32,14 +32,25 @@ async def test_trade_buy(mock_clob_cls):
     account = create_mock_account(mock_clob_cls)
     data = {
         "status": "CONFIRMED",
-        "asset_id": "1234567890",
+        "asset_id": "987561",
         "market": "abc",
-        "size": "15",
+        "size": "20",
         "price": "8",
-        "side": "BUY",
+        "side": "SELL",
         "maker_orders": [
             {
                 "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+                "asset_id": "1234567890",
+                "price": "8",
+                "matched_amount": "15",
+                'maker_address': 'b',
+            },
+            {
+                "order_id": "babfs",
+                "asset_id": "1234567890",
+                "price": "8",
+                "matched_amount": "5",
+                'maker_address': 'abc',
             }
         ]
     }
@@ -84,14 +95,25 @@ async def test_trade_sell(mock_clob_cls):
     account = create_mock_account(mock_clob_cls)
     data = {
         "status": "CONFIRMED",
-        "asset_id": "1234567890",
+        "asset_id": "987561",
         "market": "abc",
-        "size": "5",
+        "size": "20",
         "price": "8",
-        "side": "SELL",
+        "side": "BUY",
         "maker_orders": [
             {
                 "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+                "asset_id": "1234567890",
+                "price": "8",
+                "matched_amount": "5",
+                'maker_address': 'b',
+            },
+            {
+                "order_id": "babfs",
+                "asset_id": "1234567890",
+                "price": "8",
+                "matched_amount": "15",
+                'maker_address': 'abdgbc',
             }
         ]
     }
@@ -136,14 +158,25 @@ async def test_trade_fail(mock_clob_cls):
     account = create_mock_account(mock_clob_cls)
     data = {
         "status": "FAILED",
-        "asset_id": "1234567890",
+        "asset_id": "987561",
         "market": "abc",
-        "size": "5",
+        "size": "20",
         "price": "8",
         "side": "SELL",
         "maker_orders": [
             {
                 "order_id": "0xff354cd7ca7539dfa9c28d90943ab5779a4eac34b9b37a757d7b32bdfb11790b",
+                "asset_id": "1234567890",
+                "price": "8",
+                "matched_amount": "5",
+                'maker_address': 'b',
+            },
+            {
+                "order_id": "babfs",
+                "asset_id": "1234567890",
+                "price": "8",
+                "matched_amount": "15",
+                'maker_address': 'ab',
             }
         ]
     }

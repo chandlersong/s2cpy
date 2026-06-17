@@ -427,6 +427,9 @@ class PolyLiquidityProviderAccount(Account):
         [官方资料](https://docs.polymarket.com/market-data/websocket/user-channel#trade)
         1. 根据资料，整个trade有五个，为了简化，只把failed和confirm做处理。
 
+        #背景说明
+        1. 因为发过来的trade的数据是一个集合。即taker和maker都来，而这个account只是maker。所以需要到maker里面去取。
+
         FUTURE：改进项目
         1.部分成功的时候是怎么处理的。这个还是未知。所以暂时放弃。
         2.去掉初始化 asset。因为create order的时候，就会出现
@@ -443,19 +446,24 @@ class PolyLiquidityProviderAccount(Account):
                 logger.error(f"序列化的时候出错:{e}")
         trade_type = data["status"]
         refresh_position = True
-        price = float(data["price"])
-        quantity = float(data["size"])
+        maker_orders = data['maker_orders']
+        funder_address = self._config.funder_address
+        my_orders = [o for o in maker_orders if o["maker_address"] == funder_address]
+        order_amount = sum([float(o['matched_amount']) for o in my_orders])
+        cost = sum([float(o['matched_amount']) * float(o['price']) for o in my_orders])
+        if len(my_orders) == 0:
+            raise ValueError(f"orders:{data['id']}，没有找到对应的订单，数据有问题")
         if trade_type == "CONFIRMED":
             topic = self.get_topic("trade_confirm")
         elif trade_type == "FAILED":
             topic = self.get_topic("trade_failed")
             refresh_position = False
-            self._usdc_balance += quantity * price
+            self._usdc_balance += cost
         else:
             # 其他的topic暂时先不弄了。
             return
-        maker_orders = data['maker_orders']
-        asset_id = data["asset_id"]
+
+        asset_id = my_orders[0]["asset_id"]
         info = self._asset[asset_id]
         if info is None:
             # 应该在order之前就是初始化了。
@@ -475,19 +483,20 @@ class PolyLiquidityProviderAccount(Account):
         logger.info(f"{asset_id}，trade type:{trade_type}，现有orders:{len(orders)}")
 
         side = 1 if data["side"] == "BUY" else -1
-
+        my_side = side * -1
+        price = float(my_orders[0]["price"])
         if refresh_position:
-            if side == 1:
+            if my_side == 1:
                 p = info.position
-                total_cost = price * quantity + p.quantity * p.avg_price
+                total_cost = cost + p.quantity * p.avg_price
                 p.latest_price = price
-                p.quantity = quantity + p.quantity
+                p.quantity = order_amount + p.quantity
                 p.avg_price = total_cost / p.quantity
             else:
                 p = info.position
-                total_cost = p.quantity * p.avg_price - price * quantity
+                total_cost = p.quantity * p.avg_price - cost
                 p.latest_price = price
-                p.quantity = p.quantity - quantity
+                p.quantity = p.quantity - order_amount
                 p.avg_price = total_cost / p.quantity
                 if p.quantity < 0:
                     # 算是一个错误处理吧。
