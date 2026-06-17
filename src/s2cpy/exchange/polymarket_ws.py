@@ -44,6 +44,7 @@ class PolymarketWS:
         self._handlers: List[MessageHandler] = []
         self._closed = asyncio.Event()
         self._connected = asyncio.Event()
+        self._commands_on_reconnect = []
 
     async def _ensure_session(self):
         if self._session is None:
@@ -70,7 +71,7 @@ class PolymarketWS:
             await self._connect_once()
             logger.info(f"websocket connected to {self.url} successfully")
         except Exception as e:
-            logger.exception(f"initial connect failed,errr is {e}")
+            logger.exception(f"initial connect failed,err is {e}")
             raise
 
         self._connected.set()
@@ -132,11 +133,13 @@ class PolymarketWS:
                 logger.exception("heartbeat failed")
                 break
 
-    async def send(self, obj: Any):
+    async def send(self, obj: Any, send_on_reconnection: bool = True):
         if not self._ws or self._ws.closed:
             raise RuntimeError("ws not connected")
         data = obj if isinstance(obj, str) else json.dumps(obj)
         await self._ws.send_str(data)
+        if send_on_reconnection:
+            self._commands_on_reconnect.append(data)
 
     def register_handler(self, handler: MessageHandler):
         """Register a handler to receive all incoming messages.
@@ -168,6 +171,9 @@ class PolymarketWS:
                 self._connected.set()
                 self._recv_task = asyncio.create_task(self._reader_loop())
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+                for command in self._commands_on_reconnect:
+                    logger.info(f"sending command {command} at reconnect")
+                    await self._ws.send_str(command)
                 logger.info(f"reconnected after {attempts} attempts,handler num:{len(self._handlers)}")
                 return
             except Exception:

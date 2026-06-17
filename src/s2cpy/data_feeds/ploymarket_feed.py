@@ -256,7 +256,7 @@ class OneMarketDataFeed(DataFeed):
         logger.info(f"PolyMarket:Listening for {self._market_slug}")
         url = "wss://ws-subscriptions-clob.polymarket.com/ws/market"  # public echo service (manual only)
         ws = PolymarketWS(url, reconnect_attempts=2)
-        ws.register_handler("default", self._on_web_socket_message)
+        ws.register_handler(self._on_web_socket_message)
         await ws.connect()
         market = await self.get_last_market()
         self._asset = convert_markets_2_assets(market)
