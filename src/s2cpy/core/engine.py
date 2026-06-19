@@ -26,7 +26,7 @@ from typing import Dict, Any, List, Optional
 
 from blinker import Namespace, NamedSignal
 
-from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, LiveData, Monitor
+from s2cpy.model.core_model import Engine, DataFeed, Strategy, Account, AssetLiveData, Monitor
 from loguru import logger
 
 
@@ -126,7 +126,7 @@ class SingleNodeLivingTradingEngine(Engine):
             await account.start_sync(self._message_handler)
             logger.info(f"账户监听: {acc_name} 启动")
 
-    def _message_handler(self, topic: str, data: LiveData):
+    def _message_handler(self, topic: str, data: AssetLiveData):
         signal = self._signals.get(topic)
         # TODO: 统一的错误处理
         if signal:

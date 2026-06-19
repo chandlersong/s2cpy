@@ -1,17 +1,20 @@
 import asyncio
+import dataclasses
 import datetime
+from dataclasses import dataclass
 from types import CoroutineType
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Generator
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from py_clob_client_v2 import ClobClient
+from py_clob_client_v2 import ClobClient, PricesHistoryParams
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_tools import convert_markets_2_assets, split_series_markets
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import get_task_scheduler
 from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc, str_iso_datetime_to_unix_seconds
-from s2cpy.model.core_model import DataFeed, DataHandler, Asset, LiveData
+from s2cpy.model.core_model import DataFeed, DataHandler, Asset, AssetLiveData
+from s2cpy.model.polymarke_core import PolyMarketHistoryPriceLiveData
 from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 from loguru import logger
 
@@ -121,7 +124,7 @@ class CryptoRepeatDataFeed(DataFeed):
             asset_id = data["asset_id"]
             asset = self._asset[asset_id]
             topic = f"{key}.{event_type}"
-            live_data = LiveData(topic=topic, asset=asset, data=data)
+            live_data = AssetLiveData(topic=topic, asset=asset, data=data)
             self._handler(topic, live_data)
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:
@@ -248,7 +251,7 @@ class OneMarketDataFeed(DataFeed):
             asset_id = data["asset_id"]
             asset = self._asset[asset_id]
             topic = f"{key}.{event_type}"
-            live_data = LiveData(topic=topic, asset=asset, data=data)
+            live_data = AssetLiveData(topic=topic, asset=asset, data=data)
             self._handler(topic, live_data)
 
     def get_last_market(self) -> CoroutineType[Any, Any, Market]:
@@ -323,3 +326,46 @@ class SeriesHistoryDataFeed(DataFeed):
             open_markets, _ = await split_series_markets(series_id)
             new_open_market.extend(open_markets)
         self._open_market = new_open_market
+
+
+def query_market_history(client: ClobClient,  market: Market,interval: TimeInterval,
+                         start_time: Optional[int] = None)-> Generator[PolyMarketHistoryPriceLiveData, None, None]:
+    """
+    查询历史数据。
+    :param client: 查询客户端
+    :param market:
+    :param interval:
+    :param start_time: unix timestamp in seconds
+    :return:
+    """
+    if start_time is None:
+        start_time = int(market.startDate.timestamp())
+    start_time = interval.get_close_unix_seconds(timestamp=start_time)
+    end_time = interval.get_close_now_second()
+    out_comes = market.outcomes
+    clob_token_ids = market.clobTokenIds
+    market_slug = market.slug
+    if market_slug is None:
+        logger.warning(f"{market.id}没有slug")
+        return
+    if clob_token_ids is None:
+        logger.warning(f"{market_slug}没有可交易的币")
+        return
+    for idx, asset_id in enumerate(clob_token_ids):
+        params = PricesHistoryParams(
+            market=asset_id,
+            interval=interval.to_str(),
+            start_ts=start_time,
+            end_ts=end_time
+        )
+        asset_slug = f"{market_slug}_{out_comes[idx]}"
+        history = client.get_prices_history(params=params)['history']
+        for h in history:
+             yield PolyMarketHistoryPriceLiveData(
+                market_id=market.id,
+                market_slug=market_slug,
+                asset_id=asset_id,
+                asset_slug=asset_slug,
+                timestamp=h['t'],
+                price=h['p'],
+            )

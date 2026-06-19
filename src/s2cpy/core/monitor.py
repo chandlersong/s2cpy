@@ -1,6 +1,6 @@
 from typing import List
 
-from s2cpy.model.core_model import Monitor, LiveData
+from s2cpy.model.core_model import Monitor, AssetLiveData
 from s2cpy.model.polymarke_core import POLYMARKET_ACCOUNT_TOPICS
 
 
@@ -38,7 +38,7 @@ class LiquidityProviderTradeSnapshotMonitor(Monitor):
             account_topics.extend(topics)
         return data_feed_topics + account_topics
 
-    def on_live_change(self, data: LiveData):
+    def on_live_change(self, data: AssetLiveData):
         """
         当外部数据任何变化时，被调用
         :param data:

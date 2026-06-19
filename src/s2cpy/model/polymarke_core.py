@@ -18,7 +18,9 @@ from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds, get_unix_seconds_utc
-from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler, LiveData
+from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler, AssetLiveData, LiveData
+
+from datetime import datetime, timezone
 
 import asyncio
 from typing import Optional, Dict, Any, List
@@ -27,7 +29,7 @@ from loguru import logger
 
 from s2cpy.model.polymarket_io import MarketGetBySlugRequest, Market
 
-_CLOB_HOST = "https://clob.polymarket.com"
+CLOB_HOST = "https://clob.polymarket.com"
 _RELAYER_URL = "https://relayer-v2.polymarket.com"
 """
 # 业务定义
@@ -181,7 +183,7 @@ class PolyLiquidityProviderAccount(Account):
         self._sync_task: Optional[asyncio.Task] = None
         self._asset: Dict[str, AssertInfo] = dict()  # assertid/AssertInfo：主要方便查询
         self._clob_client = ClobClient(
-            host=_CLOB_HOST,
+            host=CLOB_HOST,
             chain_id=POLYGON,
             key=self._config.private_key,
             funder=self._config.funder_address,
@@ -506,7 +508,7 @@ class PolyLiquidityProviderAccount(Account):
                     # 算是一个错误处理吧。
                     asyncio.create_task(self.sync_account_position())
 
-        live_data = LiveData(topic=topic, asset=asset, data=data)
+        live_data = AssetLiveData(topic=topic, asset=asset, data=data)
         self._handler(topic, live_data)
 
     def on_web_socket_order(self, data: Dict[str, Any]):
@@ -547,7 +549,7 @@ class PolyLiquidityProviderAccount(Account):
                 usdc_return = price * quantity
                 self._usdc_balance += usdc_return
             topic = self.get_topic("order_cancelled")
-            live_data = LiveData(topic=topic, asset=asset_info.asset, data=data)
+            live_data = AssetLiveData(topic=topic, asset=asset_info.asset, data=data)
             self._handler(topic, live_data)
         elif order_type == "UPDATE":
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
@@ -569,7 +571,7 @@ class PolyLiquidityProviderAccount(Account):
                 asyncio.run(self.sync_account_position())
 
             topic = self.get_topic("order_update")
-            live_data = LiveData(topic=topic, asset=asset_info.asset, data=data)
+            live_data = AssetLiveData(topic=topic, asset=asset_info.asset, data=data)
             self._handler(topic, live_data)
         elif order_type == "PLACEMENT":
             order = Order(id=id_, side=side, quantity=data["original_size"], quantity_match=data["size_matched"],
@@ -588,3 +590,48 @@ class PolyLiquidityProviderAccount(Account):
                 logger.error("其他错误:", e)
         except Exception as e:
             logger.error("其他异常:", type(e).__name__, str(e))
+
+
+@dataclasses.dataclass
+class PolyMarketHistoryPriceLiveData(LiveData):
+    table: str = None
+    series_id: str= None
+    series_slug: str= None
+    event_id: str= None
+    event_slug: str= None
+    market_id: str= None
+    market_slug: str= None
+    asset_id: str= None
+    asset_slug: str= None
+    timestamp: int= None
+    price: float= None
+
+    def pretty_print(self, include_table: bool = True) -> str:
+        """Return a human-friendly one-line representation of this live data.
+
+        - Detects whether `timestamp` is in seconds or milliseconds and formats
+          it as an ISO-8601 UTC timestamp.
+        - Shows market/series/asset and the price with sensible precision.
+        """
+        ts = int(self.timestamp)
+        # Heuristic: if timestamp looks like milliseconds (>= 1e12) convert.
+        if ts >= 10**12:
+            dt = datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc)
+        else:
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        ts_str = dt.isoformat()
+
+        parts = [f"{ts_str}", f"{self.market_slug}:{self.series_slug}", f"{self.asset_slug}"]
+        main = " / ".join(parts)
+        price_str = f"price={self.price:.6f}"
+        table_str = f"table={self.table}" if include_table else ""
+        if table_str:
+            return f"[{main}] {price_str} ({table_str})"
+        return f"[{main}] {price_str}"
+
+    def __str__(self) -> str:
+        return self.pretty_print()
+
+    def __repr__(self) -> str:
+        return f"PolyMarketHistoryPriceLiveData({self.market_slug!r}, {self.asset_slug!r}, ts={self.timestamp}, price={self.price})"
+

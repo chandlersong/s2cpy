@@ -66,8 +66,15 @@ class OrderInfo:
     quantity: float
 
 
+class LiveData(Protocol):
+    """
+    placeholder
+    """
+    pass
+
+
 @dataclasses.dataclass
-class LiveData:
+class AssetLiveData:
     """
     表示具体的数据
     """

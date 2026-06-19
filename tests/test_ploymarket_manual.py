@@ -1,23 +1,23 @@
 import asyncio
 import json
 import os
-from datetime import datetime
-from typing import List
-from zoneinfo import ZoneInfo
-
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
+
+from py_clob_client_v2.constants import POLYGON
+
+
 import pandas as pd
 
 from s2cpy.exchange.polymarket_tools import split_pusdt
 from s2cpy.infrastructure.time import get_unix_seconds_utc, TimeInterval
 
 from py_clob_client_v2 import Side, ClobClient, PricesHistoryParams
-from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount
+from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount, CLOB_HOST
 import pytest
 from loguru import logger
 
-from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed, SeriesHistoryDataFeed
+from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed, SeriesHistoryDataFeed, query_market_history
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
@@ -354,3 +354,23 @@ async def test_get_open_markets_by_series_id():
     markets = data_feed.open_market
     for market in markets:
         logger.info(f"market slug: {market.slug}")
+
+
+@pytest.mark.manual
+async def test_query_market_history():
+    """
+    event slug: bitcoin-up-or-down-on-june-18-2026,series id:41,series slug:btc-up-or-down-daily
+    例子代码，通过series id获得最新
+    :return:
+    """
+    clob_client = ClobClient(
+        host=CLOB_HOST,
+        chain_id=POLYGON
+    )
+    data_feed = SeriesHistoryDataFeed(["10151"], TimeInterval.OneHour)
+    await data_feed.refresh_markets()
+    market = data_feed.open_market[0]
+    logger.info(f"market slug: {market.slug},start at {market.startDate}")
+    live_data_stream = query_market_history(clob_client,market, interval=TimeInterval.OneHour)
+    for live_data in live_data_stream:
+        logger.info(f"live_data:{live_data}")

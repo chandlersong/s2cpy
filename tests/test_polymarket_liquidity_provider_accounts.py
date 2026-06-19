@@ -76,8 +76,8 @@ async def test_trade_buy(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("trade_confirm")
-    from s2cpy.model.core_model import LiveData
-    assert isinstance(live_data_arg, LiveData)
+    from s2cpy.model.core_model import AssetLiveData
+    assert isinstance(live_data_arg, AssetLiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
 
@@ -139,8 +139,8 @@ async def test_trade_sell(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("trade_confirm")
-    from s2cpy.model.core_model import LiveData
-    assert isinstance(live_data_arg, LiveData)
+    from s2cpy.model.core_model import AssetLiveData
+    assert isinstance(live_data_arg, AssetLiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
 
@@ -203,8 +203,8 @@ async def test_trade_fail(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("trade_failed")
-    from s2cpy.model.core_model import LiveData
-    assert isinstance(live_data_arg, LiveData)
+    from s2cpy.model.core_model import AssetLiveData
+    assert isinstance(live_data_arg, AssetLiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
 
@@ -258,8 +258,8 @@ async def test_order_update_sell(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("order_update")
-    from s2cpy.model.core_model import LiveData
-    assert isinstance(live_data_arg, LiveData)
+    from s2cpy.model.core_model import AssetLiveData
+    assert isinstance(live_data_arg, AssetLiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
 
@@ -313,8 +313,8 @@ async def test_order_update_buy(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("order_update")
-    from s2cpy.model.core_model import LiveData
-    assert isinstance(live_data_arg, LiveData)
+    from s2cpy.model.core_model import AssetLiveData
+    assert isinstance(live_data_arg, AssetLiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
 
@@ -368,8 +368,8 @@ async def test_order_cancel(mock_clob_cls):
     assert call_args is not None
     topic_arg, live_data_arg = call_args[0]
     assert topic_arg == account.get_topic("order_cancelled")
-    from s2cpy.model.core_model import LiveData
-    assert isinstance(live_data_arg, LiveData)
+    from s2cpy.model.core_model import AssetLiveData
+    assert isinstance(live_data_arg, AssetLiveData)
     assert live_data_arg.asset == asset
     assert live_data_arg.data == data
 

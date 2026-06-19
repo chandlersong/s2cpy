@@ -266,16 +266,16 @@ async def split_series_markets(series_id: str) -> tuple[List[Market], List[Marke
         markets = e.markets
         if markets is None:
             # 感觉脏数据挺多的。
-            logger.debug(f"{event.slug} has no markets")
+            logger.trace(f"{event.slug} has no markets")
             continue
         for m in markets:
             start = m.startDate
             if start is None:
-                logger.debug(f"{m.slug} has no start date")
+                logger.trace(f"{m.slug} has no start date")
                 continue
             end = m.endDate
             if end is None:
-                logger.debug(f"{m.slug} has no end date")
+                logger.trace(f"{m.slug} has no end date")
                 continue
 
             # Normalize datetimes to timezone-aware UTC for safe comparison.
@@ -291,7 +291,7 @@ async def split_series_markets(series_id: str) -> tuple[List[Market], List[Marke
             except Exception:
                 logger.exception(f"failed to normalize datetimes for market {m.slug}")
                 continue
-            logger.debug(f"{m.slug} start: {start_utc}, end: {end_utc}")
+            logger.trace(f"{m.slug} start: {start_utc}, end: {end_utc}")
             if start_utc <= now <= end_utc:
                 open_markets.append(m)
             else:
