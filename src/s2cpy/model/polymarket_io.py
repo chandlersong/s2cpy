@@ -143,7 +143,7 @@ class Market(BaseModel):
     slug: Optional[str] = None
     twitterCardImage: Optional[str] = None
     resolutionSource: Optional[str] = None
-    endDate: Optional[str] = None
+    endDate: Optional[datetime] = None
     category: Optional[str] = None
     ammType: Optional[str] = None
     liquidity: Optional[str] = None

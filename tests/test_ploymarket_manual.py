@@ -1,6 +1,9 @@
 import asyncio
 import json
 import os
+from datetime import datetime
+from typing import List
+from zoneinfo import ZoneInfo
 
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
@@ -9,17 +12,17 @@ import pandas as pd
 from s2cpy.exchange.polymarket_tools import split_pusdt
 from s2cpy.infrastructure.time import get_unix_seconds_utc, TimeInterval
 
-from py_clob_client_v2 import Side
+from py_clob_client_v2 import Side, ClobClient, PricesHistoryParams
 from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount
 import pytest
 from loguru import logger
 
-from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed
+from s2cpy.data_feeds.ploymarket_feed import CryptoRepeatDataFeed, SeriesHistoryDataFeed
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.settings import get_global_config, setup_global_logging, PolyMarketRelayerAccount
 from s2cpy.model.polymarket_io import PublicSearchRequest, EventGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest, \
-    ListMarketsRequest, MarketGetBySlugRequest
+    ListMarketsRequest, MarketGetBySlugRequest, Market
 
 
 @pytest.mark.manual
@@ -288,17 +291,66 @@ async def test_split_usdt_neg_risk():
     cfg = get_global_config()
     setup_global_logging(cfg.log)
     setup_global_logging(cfg.log)
-    event_slug = "world-cup-winner"
+    event_slug = "bitcoin-up-or-down-on-june-18-2026"
     api = RestfulAPI()
     event = await api.get_event_by_slug(EventGetBySlugRequest.build(slug=event_slug))
     logger.info(f"event id: {event.id},event_negRisk:{event.negRisk}")
-    zero_rate_cuts = event.markets[0]
-    logger.info(f"market slug : {zero_rate_cuts.slug},event_negRisk:{zero_rate_cuts.negRisk}")
+    markets = event.markets
+    logger.info(f"markets num: {len(markets)}")
+    for market in markets:
+        logger.info(f"{market.slug}")
+        assets_ids = market.clobTokenIds
+        for asset in assets_ids:
+            logger.info(f"asset: {asset}")
     account_config = cfg.get_default_account()
     account = PolyLiquidityProviderAccount(account_config)
-    wallet_address = account_config.funder_address
-    relay_client = account._relay_client
-    deposit_wallet = account_config.deposit_wallet
-    condition_id = zero_rate_cuts.conditionId
-    assert condition_id is not None, "market.conditionId should not be None when splitting pUSDT"
-    # split_pusdt(relay_client, condition_id, 1, wallet_address, deposit_wallet, is_neg_risk=zero_rate_cuts.negRisk)
+    clob = account._clob_client
+    clob.get_prices_history()
+    # logger.info(f"market slug : {zero_rate_cuts.slug},event_negRisk:{zero_rate_cuts.negRisk}")
+    # account_config = cfg.get_default_account()
+    # account = PolyLiquidityProviderAccount(account_config)
+    # wallet_address = account_config.funder_address
+    # relay_client = account._relay_client
+    # deposit_wallet = account_config.deposit_wallet
+    # condition_id = zero_rate_cuts.conditionId
+    # assert condition_id is not None, "market.conditionId should not be None when splitting pUSDT"
+    # # split_pusdt(relay_client, condition_id, 1, wallet_address, deposit_wallet, is_neg_risk=zero_rate_cuts.negRisk)
+
+
+@pytest.mark.manual
+async def test_find_event_series_id():
+    cfg = get_global_config()
+    setup_global_logging(cfg.log)
+    setup_global_logging(cfg.log)
+    event_slugs = ["bitcoin-above-on-june-19-2026",
+                   "what-price-will-bitcoin-hit-june-15-21-2026",
+                   "bitcoin-price-on-june-19-2026"]
+    for event_slug in event_slugs:
+        api = RestfulAPI()
+        event = await api.get_event_by_slug(EventGetBySlugRequest.build(slug=event_slug))
+        series = event.series
+        for s in series:
+            logger.info(f"event slug: {event_slug},series id:{s.id},series slug:{s.slug}")
+    # logger.info(f"market slug : {zero_rate_cuts.slug},event_negRisk:{zero_rate_cuts.negRisk}")
+    # account_config = cfg.get_default_account()
+    # account = PolyLiquidityProviderAccount(account_config)
+    # wallet_address = account_config.funder_address
+    # relay_client = account._relay_client
+    # deposit_wallet = account_config.deposit_wallet
+    # condition_id = zero_rate_cuts.conditionId
+    # assert condition_id is not None, "market.conditionId should not be None when splitting pUSDT"
+    # # split_pusdt(relay_client, condition_id, 1, wallet_address, deposit_wallet, is_neg_risk=zero_rate_cuts.negRisk)
+
+
+@pytest.mark.manual
+async def test_get_open_markets_by_series_id():
+    """
+    event slug: bitcoin-up-or-down-on-june-18-2026,series id:41,series slug:btc-up-or-down-daily
+    例子代码，通过series id获得最新
+    :return:
+    """
+    data_feed = SeriesHistoryDataFeed(["41"], TimeInterval.OneHour)
+    await data_feed.refresh_markets()
+    markets = data_feed.open_market
+    for market in markets:
+        logger.info(f"market slug: {market.slug}")

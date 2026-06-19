@@ -1,13 +1,18 @@
 import asyncio
+import datetime
 from types import CoroutineType
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from py_clob_client_v2 import ClobClient
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.exchange.polymarket_tools import convert_markets_2_assets
 from s2cpy.exchange.polymarket_ws import PolymarketWS
-from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc
+from s2cpy.infrastructure.async_tools import get_task_scheduler
+from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc, str_iso_datetime_to_unix_seconds
 from s2cpy.model.core_model import DataFeed, DataHandler, Asset, LiveData
-from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest
+from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 from loguru import logger
 
 POLYMARKET_DATA_FEED_TOPICS = {
@@ -270,3 +275,93 @@ class OneMarketDataFeed(DataFeed):
         }
         await ws.send(sub)
         return ws
+
+
+class SeriesHistoryDataFeed(DataFeed):
+
+    def __init__(self, series_ids: list[str], interval: TimeInterval, refresh_market_corn: str = '3 5 * * *'):
+        """
+
+        :param series_ids: ides
+        :param interval: 间隔周期
+        :param refresh_market_corn: 很多币圈的日级别的都在11:59 PM ET。因为夏令时的关系。所以暂时先在这个时间
+        """
+        self._client = ClobClient(
+            host="https://clob.polymarket.com",
+            chain_id=137
+        )
+        self._series_ids = series_ids
+        self._interval = interval
+        self._handler: DataHandler = None
+        self._refresh_market_corn = refresh_market_corn
+        self._open_market: List[Market] = []
+
+    @property
+    def open_market(self):
+        return self._open_market
+
+    def subscribe(self, handler: DataHandler):
+        self._handler = handler
+
+    async def start(self):
+        await self.refresh_markets()
+        scheduler = get_task_scheduler()
+        task_id = f"series_history_{"_".join(self._series_ids)}"
+        scheduler.add_job(
+            self.refresh_markets,
+            trigger='cron',
+            cron=self._refresh_market_corn,  # ← 推荐这种，更接近 unix cron
+            id=task_id,
+            replace_existing=True
+        )
+
+    def supported_data_list(self) -> list[str]:
+        interval_str = self._interval.to_str()
+        return [f"{series_id}_{interval_str}_history" for series_id in self._series_ids]
+
+    async def refresh_markets(self):
+        # Use timezone-aware UTC now to avoid comparing naive and aware datetimes
+        # returned by the API models. Convert naive datetimes to UTC as a fallback.
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for series_id in self._series_ids:
+            api = RestfulAPI()
+            logger.info(f"开始刷新 {series_id}")
+            series = await api.get_series_by_id(SeriesGetRequest.build(id=series_id))
+            events = series.events
+            if events is None:
+                # 以后加入到数据库中，或者加入到日志中，方便后续排查问题
+                logger.warning(f"{series.slug} has no events")
+                continue
+            for event in events:
+                e = await api.get_event_by_id(EventGetByIdRequest.build(id=event.id))
+                markets = e.markets
+                if markets is None:
+                    # 感觉脏数据挺多的。
+                    logger.debug(f"{event.slug} has no markets")
+                    continue
+                for m in markets:
+                    start = m.startDate
+                    if start is None:
+                        logger.debug(f"{m.slug} has no start date")
+                        continue
+                    end = m.endDate
+                    if end is None:
+                        logger.debug(f"{m.slug} has no end date")
+                        continue
+
+                    # Normalize datetimes to timezone-aware UTC for safe comparison.
+                    def _ensure_aware_utc(dt: datetime.datetime) -> datetime.datetime:
+                        if dt.tzinfo is None:
+                            # Assume UTC for naive datetimes (API should usually return aware)
+                            return dt.replace(tzinfo=datetime.timezone.utc)
+                        return dt.astimezone(datetime.timezone.utc)
+
+                    try:
+                        start_utc = _ensure_aware_utc(start)
+                        end_utc = _ensure_aware_utc(end)
+                    except Exception:
+                        logger.exception(f"failed to normalize datetimes for market {m.slug}")
+                        continue
+                    logger.debug(f"{m.slug} start: {start_utc}, end: {end_utc}")
+                    if start_utc <= now <= end_utc:
+                        self._open_market.append(m)
