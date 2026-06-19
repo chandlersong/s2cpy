@@ -1,10 +1,11 @@
 """
 主要是polymarket的一些工具类方法
 """
+import datetime
 import os
 
 import time
-from typing import Dict, get_args, Any
+from typing import Dict, get_args, Any, List
 
 from eth_abi import encode
 from eth_utils import keccak, to_checksum_address
@@ -16,7 +17,7 @@ from py_clob_client_v2 import TickSize
 from s2cpy.exchange.polymarket_api import RestfulAPI
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
 from s2cpy.model.core_model import Asset
-from s2cpy.model.polymarket_io import Market, MarketGetByIdRequest
+from s2cpy.model.polymarket_io import Market, MarketGetByIdRequest, EventGetByIdRequest, SeriesGetRequest
 from loguru import logger
 
 # 合约地址
@@ -182,6 +183,7 @@ def convert_markets_2_assets(market: Market) -> Dict[str, Asset]:
         )
     return result
 
+
 async def asserts_by_market_id(market_id: str) -> Dict[str, Asset]:
     """
     把market转换成assert
@@ -240,3 +242,59 @@ def create_order_args(asset: Asset, price: float, size: float, side: int) -> Dic
         "size": size,
         "side": side
     }
+
+
+async def split_series_markets(series_id: str) -> tuple[List[Market], List[Market]]:
+    """
+    根据series_id把市场分成两类：正在
+    :param series_id:
+    :return: open_markets,close_markets
+    """
+    open_markets: List[Market] = []
+    close_markets: List[Market] = []
+    now = datetime.datetime.now(datetime.timezone.utc)
+    api = RestfulAPI()
+    logger.info(f"开始刷新 {series_id}")
+    series = await api.get_series_by_id(SeriesGetRequest.build(id=series_id))
+    events = series.events
+    if events is None:
+        # 以后加入到数据库中，或者加入到日志中，方便后续排查问题
+        logger.warning(f"{series.slug} has no events")
+        return open_markets, close_markets
+    for event in events:
+        e = await api.get_event_by_id(EventGetByIdRequest.build(id=event.id))
+        markets = e.markets
+        if markets is None:
+            # 感觉脏数据挺多的。
+            logger.debug(f"{event.slug} has no markets")
+            continue
+        for m in markets:
+            start = m.startDate
+            if start is None:
+                logger.debug(f"{m.slug} has no start date")
+                continue
+            end = m.endDate
+            if end is None:
+                logger.debug(f"{m.slug} has no end date")
+                continue
+
+            # Normalize datetimes to timezone-aware UTC for safe comparison.
+            def _ensure_aware_utc(dt: datetime.datetime) -> datetime.datetime:
+                if dt.tzinfo is None:
+                    # Assume UTC for naive datetimes (API should usually return aware)
+                    return dt.replace(tzinfo=datetime.timezone.utc)
+                return dt.astimezone(datetime.timezone.utc)
+
+            try:
+                start_utc = _ensure_aware_utc(start)
+                end_utc = _ensure_aware_utc(end)
+            except Exception:
+                logger.exception(f"failed to normalize datetimes for market {m.slug}")
+                continue
+            logger.debug(f"{m.slug} start: {start_utc}, end: {end_utc}")
+            if start_utc <= now <= end_utc:
+                open_markets.append(m)
+            else:
+                close_markets.append(m)
+
+    return open_markets, close_markets
