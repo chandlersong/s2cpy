@@ -12,7 +12,7 @@ import pandas as pd
 from s2cpy.exchange.polymarket_tools import split_pusdt
 from s2cpy.infrastructure.time import get_unix_seconds_utc, TimeInterval
 
-from py_clob_client_v2 import Side, ClobClient, PricesHistoryParams
+from py_clob_client_v2 import Side, ClobClient
 from s2cpy.model.polymarke_core import PolyLiquidityProviderAccount, CLOB_HOST
 import pytest
 from loguru import logger

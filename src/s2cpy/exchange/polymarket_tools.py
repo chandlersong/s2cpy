@@ -1,6 +1,7 @@
 """
 主要是polymarket的一些工具类方法
 """
+import dataclasses
 import datetime
 import os
 
@@ -244,25 +245,41 @@ def create_order_args(asset: Asset, price: float, size: float, side: int) -> Dic
     }
 
 
-async def split_series_markets(series_id: str) -> tuple[List[Market], List[Market]]:
+@dataclasses.dataclass
+class MarketWithAddition:
+    market: Market
+    series_id: str
+    series_slug: str
+    event_id: str
+    event_slug: str
+
+
+async def split_series_markets(series_id: str) -> tuple[List[MarketWithAddition], List[MarketWithAddition]]:
     """
     根据series_id把市场分成两类：正在
     :param series_id:
     :return: open_markets,close_markets
     """
-    open_markets: List[Market] = []
-    close_markets: List[Market] = []
+    open_markets: List[MarketWithAddition] = []
+    close_markets: List[MarketWithAddition] = []
     now = datetime.datetime.now(datetime.timezone.utc)
     api = RestfulAPI()
     logger.info(f"开始刷新 {series_id}")
     series = await api.get_series_by_id(SeriesGetRequest.build(id=series_id))
     events = series.events
+    series_slug = series.slug
+    if series_slug is None:
+        raise ValueError(f"series id:{series_id},series_slug:{series_slug} series.slug is None")
     if events is None:
         # 以后加入到数据库中，或者加入到日志中，方便后续排查问题
         logger.warning(f"{series.slug} has no events")
         return open_markets, close_markets
     for event in events:
         e = await api.get_event_by_id(EventGetByIdRequest.build(id=event.id))
+        event_slug = event.slug
+        if event_slug is None:
+            logger.warning(f"event {event.id} has no slug")
+            event_slug = ""
         markets = e.markets
         if markets is None:
             # 感觉脏数据挺多的。
@@ -293,8 +310,21 @@ async def split_series_markets(series_id: str) -> tuple[List[Market], List[Marke
                 continue
             logger.trace(f"{m.slug} start: {start_utc}, end: {end_utc}")
             if start_utc <= now <= end_utc:
-                open_markets.append(m)
+
+                open_markets.append(MarketWithAddition(
+                    market=m,
+                    series_id=series_id,
+                    series_slug=series_slug,
+                    event_id=event.id,
+                    event_slug=event_slug,
+                ))
             else:
-                close_markets.append(m)
+                close_markets.append(MarketWithAddition(
+                    market=m,
+                    series_id=series_id,
+                    series_slug=series_slug,
+                    event_id=event.id,
+                    event_slug=event_slug,
+                ))
 
     return open_markets, close_markets

@@ -7,14 +7,16 @@ from typing import Any, Dict, Optional, List, Generator
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from py_clob_client_v2 import ClobClient, PricesHistoryParams
+from py_clob_client_v2.constants import POLYGON
 
 from s2cpy.exchange.polymarket_api import RestfulAPI
-from s2cpy.exchange.polymarket_tools import convert_markets_2_assets, split_series_markets
+from s2cpy.exchange.polymarket_tools import convert_markets_2_assets, split_series_markets, MarketWithAddition
 from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import get_task_scheduler
-from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc, str_iso_datetime_to_unix_seconds
+from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc, str_iso_datetime_to_unix_seconds, \
+    get_unix_seconds_utc
 from s2cpy.model.core_model import DataFeed, DataHandler, Asset, AssetLiveData
-from s2cpy.model.polymarke_core import PolyMarketHistoryPriceLiveData
+from s2cpy.model.polymarke_core import PolyMarketHistoryPriceLiveData, CLOB_HOST
 from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 from loguru import logger
 
@@ -282,7 +284,8 @@ class OneMarketDataFeed(DataFeed):
 
 class SeriesHistoryDataFeed(DataFeed):
 
-    def __init__(self, series_ids: list[str], interval: TimeInterval, refresh_market_corn: str = '3 5 * * *'):
+    def __init__(self, series_ids: list[str], interval: TimeInterval, refresh_market_corn: str = '3 5 * * *',
+                 initial_start: int | None = None):
         """
 
         :param series_ids: ides
@@ -291,9 +294,15 @@ class SeriesHistoryDataFeed(DataFeed):
         """
         self._series_ids = series_ids
         self._interval = interval
-        self._handler: DataHandler = None
+        self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
+            AttributeError(f"SeriesHistoryDataFeed,handler没有设置, 请检查代码"))
         self._refresh_market_corn = refresh_market_corn
-        self._open_market: List[Market] = []
+        self._open_market: List[MarketWithAddition] = []
+        self._initial_start = initial_start
+
+    @property
+    def name(self):
+        return "PolyMarket"
 
     @property
     def open_market(self):
@@ -313,23 +322,68 @@ class SeriesHistoryDataFeed(DataFeed):
             id=task_id,
             replace_existing=True
         )
+        logger.info(f"PolyMarket history:Started to initial history data")
+        await self.fetch__history(2)
+        scheduler.add_job(
+            self.fetch__history,
+            trigger='cron',
+            cron='2 * * * *',  # ← 推荐这种，更接近 unix cron
+            id=f"series_history_1h_refresh_task",
+            replace_existing=True
+        )
 
     def supported_data_list(self) -> list[str]:
         interval_str = self._interval.to_str()
         return [f"{series_id}_{interval_str}_history" for series_id in self._series_ids]
+
+    async def fetch__history(self, start_type: int = 1):
+        """
+        :param start_type: 1 代表时一个小时前，2代表直接取market的开始时间
+        :return:
+        """
+        now_timestamp = get_unix_seconds_utc()
+        clob_client = ClobClient(
+            host=CLOB_HOST,
+            chain_id=POLYGON
+        )
+        interval_str = self._interval.to_str()
+        for wrapped_market in self._open_market:
+            market = wrapped_market.market
+
+            start_ts = None
+            if start_type == 1:
+                start_ts = self._interval.get_close_unix_seconds(now_timestamp - 60 * 60) - 1
+            elif start_type == 2:
+                start_ts = None
+            start_log = start_ts if start_ts is not None else "market start"
+            logger.debug(f"fetch {market.slug} from {start_log}")
+            live_data_stream = query_market_history(clob_client, market, interval=TimeInterval.OneHour,
+                                                    start_time=start_ts)
+            for data in live_data_stream:
+                data.series_id = wrapped_market.series_id
+                data.series_slug = wrapped_market.series_slug
+                data.event_id = wrapped_market.event_id
+                data.event_slug = wrapped_market.event_slug
+                data.table = "polymarket_1h_history"
+                topic = f"{wrapped_market.series_id}_{interval_str}_history"
+                self._handler(topic, data)
 
     async def refresh_markets(self):
         # Use timezone-aware UTC now to avoid comparing naive and aware datetimes
         # returned by the API models. Convert naive datetimes to UTC as a fallback.
         new_open_market = []
         for series_id in self._series_ids:
-            open_markets, _ = await split_series_markets(series_id)
-            new_open_market.extend(open_markets)
+            try:
+                open_markets, _ = await split_series_markets(series_id)
+                new_open_market.extend(open_markets)
+            except Exception as e:
+                logger.error("error at refresh markets by series", e)
+
         self._open_market = new_open_market
 
 
-def query_market_history(client: ClobClient,  market: Market,interval: TimeInterval,
-                         start_time: Optional[int] = None)-> Generator[PolyMarketHistoryPriceLiveData, None, None]:
+def query_market_history(client: ClobClient, market: Market, interval: TimeInterval,
+                         start_time: Optional[int] = None) -> Generator[PolyMarketHistoryPriceLiveData, None, None]:
     """
     查询历史数据。
     :param client: 查询客户端
@@ -361,7 +415,7 @@ def query_market_history(client: ClobClient,  market: Market,interval: TimeInter
         asset_slug = f"{market_slug}_{out_comes[idx]}"
         history = client.get_prices_history(params=params)['history']
         for h in history:
-             yield PolyMarketHistoryPriceLiveData(
+            yield PolyMarketHistoryPriceLiveData(
                 market_id=market.id,
                 market_slug=market_slug,
                 asset_id=asset_id,
