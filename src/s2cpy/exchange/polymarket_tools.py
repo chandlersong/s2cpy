@@ -264,7 +264,7 @@ async def split_series_markets(series_id: str) -> tuple[List[MarketWithAddition]
     close_markets: List[MarketWithAddition] = []
     now = datetime.datetime.now(datetime.timezone.utc)
     api = RestfulAPI()
-    logger.info(f"开始刷新 {series_id}")
+    logger.info(f"开始刷新 series:{series_id}的markets")
     series = await api.get_series_by_id(SeriesGetRequest.build(id=series_id))
     events = series.events
     series_slug = series.slug

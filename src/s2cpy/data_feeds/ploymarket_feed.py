@@ -6,6 +6,7 @@ from types import CoroutineType
 from typing import Any, Dict, Optional, List, Generator
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from py_clob_client_v2 import ClobClient, PricesHistoryParams
 from py_clob_client_v2.constants import POLYGON
 
@@ -317,8 +318,7 @@ class SeriesHistoryDataFeed(DataFeed):
         task_id = f"series_history_{"_".join(self._series_ids)}"
         scheduler.add_job(
             self.refresh_markets,
-            trigger='cron',
-            cron=self._refresh_market_corn,  # ← 推荐这种，更接近 unix cron
+            trigger=CronTrigger.from_crontab(self._refresh_market_corn),   # 秒 分 时 日 月 周
             id=task_id,
             replace_existing=True
         )
@@ -326,8 +326,7 @@ class SeriesHistoryDataFeed(DataFeed):
         await self.fetch__history(2)
         scheduler.add_job(
             self.fetch__history,
-            trigger='cron',
-            cron='2 * * * *',  # ← 推荐这种，更接近 unix cron
+            trigger=CronTrigger.from_crontab('2 * * * *'),  # 秒 分 时 日 月 周
             id=f"series_history_1h_refresh_task",
             replace_existing=True
         )
