@@ -42,6 +42,8 @@ class PolyMarketRelayerAccount(AccountBase):
 
 class SyncSetting(BaseModel):
     sync_cache_folder: str = "/app/cache"  # DEBUG / INFO / WARNING / ERROR
+    port: int = 50051
+    server_address: str = "localhost"
 
 
 # 兼容命名：保留原来的占位符名（如果外部引用了 AccountSettings ）
