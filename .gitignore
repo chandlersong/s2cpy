@@ -11,3 +11,4 @@ wheels/
 /config/dev.toml
 /docs/tasks/
 /src/s2cpy/generated/
+/cache/

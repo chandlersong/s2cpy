@@ -40,6 +40,10 @@ class PolyMarketRelayerAccount(AccountBase):
     builder_pass_phrase: str = None
 
 
+class SyncSetting(BaseModel):
+    sync_cache_folder: str = "/app/cache"  # DEBUG / INFO / WARNING / ERROR
+
+
 # 兼容命名：保留原来的占位符名（如果外部引用了 AccountSettings ）
 AccountSettings = AccountBase
 
@@ -51,6 +55,7 @@ class AppSettings(BaseSettings):
     debug: bool = False
     proxy_url: Optional[str] = None
     log: LogSetting = LogSetting()
+    sync: SyncSetting = SyncSetting()
     # pydantic-settings 配置
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",  # 支持 DATABASE__HOST=xxx 这种环境变量

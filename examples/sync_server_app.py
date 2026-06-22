@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
 
@@ -20,9 +22,9 @@ async def main():
     :return:
     """
 
-    sync_server = HistorySyncServer()
     config = get_global_config()
     setup_global_logging(config.log)
+    sync_server = HistorySyncServer(cache_root=Path(config.sync.sync_cache_folder))
     series_ids = ["45",
                   "10151",
                   "10041", ]

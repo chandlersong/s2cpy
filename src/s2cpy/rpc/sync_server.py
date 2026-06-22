@@ -21,7 +21,10 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServer):
     def __init__(self, cache_root: Path | None = None):
         if cache_root is None:
             cache_root = Path("/app/cache/polymarket_history_cache")
-        self._cache_root = cache_root / "/polymarket_history_cachex"
+        self._cache_root = cache_root / "polymarket_history_cache"
+        if not self._cache_root.exists():
+            self._cache_root.mkdir(parents=True, exist_ok=True)
+
         self._cache = history_data_pb2.PolyMarketHistoryList()
 
     def handler_new_data(self, topic, data: LiveData):
@@ -40,14 +43,10 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServer):
             history.price = data.price
             self._cache.history_list.append(history)
             if len(self._cache.history_list) > 100:
-                bytes = self._cache.SerializeToString()
-                logger.info(f"to string{bytes}")
+                self.persist_cache()
 
     def persist_cache(self):
-        if not self._cache.exists():
-            logger.warning(f"cache的目录：{self._cache_root}不存在，跳过cache")
-            return
-        if len(self._cache.history_list()) == 0:
+        if len(self._cache.history_list) == 0:
             return
         cache_entry = self._cache.SerializeToString()
         cache_file_name = self._cache_root / f"{now_unix_ms_utc()}.bin"
