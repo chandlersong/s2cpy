@@ -1,0 +1,46 @@
+syntax = "proto3";
+package s2cpy.generated;
+
+// 服务器端和客户端同步的服务
+service SyncServer {
+  // 双向流：Client 发送命令，Server 推送消息
+  rpc sync(stream ClientMessage) returns (stream ServerMessage) {}
+}
+
+// ================== Client -> Server ==================
+message ClientMessage {
+  oneof payload {
+    Initial initial = 1;           // 初始化消息
+  }
+}
+
+// 客户端给服务器端发送的消息。
+message Initial {
+  string cmd_type = 1;     //
+  int64 local_max_timestamp = 2; //本地服务器最大的时间戳
+}
+
+message ServerMessage {
+  oneof payload {
+    PolyMarketHistoryList polymarket_history = 1;     // 批量
+  }
+}
+
+message PolyMarketHistory {
+    string table = 1;
+    string series_id=2;
+    string series_slug= 3;
+    string event_id= 4;
+    string event_slug= 5;
+    string market_id= 6;
+    string market_slug= 7;
+    string asset_id= 8;
+    string asset_slug= 9;
+    double timestamp= 10;
+    double price= 11;
+}
+
+message PolyMarketHistoryList {
+  repeated PolyMarketHistory history_list = 1;
+  int64 timestamp = 2;
+}

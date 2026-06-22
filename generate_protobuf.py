@@ -2,30 +2,28 @@
 """
 跨平台编译 protobuf 文件到指定位置（不依赖操作系统）
 """
+import re
+import shutil
+
 import sys
 from pathlib import Path
 from grpc_tools import protoc
 
 
 def fix_imports(out_dir):
-    """修复生成的 grpc 文件中的导入语句"""
-    grpc_file = out_dir / "message_pb2_grpc.py"
+    for grpc_file in out_dir.glob("*_grpc.py"):
+        content = grpc_file.read_text()
 
-    if not grpc_file.exists():
-        return
+        # 替换导入
+        content = re.sub(
+            r'^import (\w+_pb2) as',
+            r'from . import \1 as',
+            content,
+            flags=re.MULTILINE
+        )
 
-    content = grpc_file.read_text()
-
-    # 修复导入：from . import message_pb2 或 import message_pb2
-    # 改为：from . import message_pb2
-    original_import = "import message_pb2 as message__pb2"
-    fixed_import = "from . import message_pb2 as message__pb2"
-
-    if original_import in content:
-        content = content.replace(original_import, fixed_import)
         grpc_file.write_text(content)
-        print(f"✅ 已修复 {grpc_file.name} 中的导入语句")
-
+        print(f"✓ 修复: {grpc_file.name}")
 
 def compile_proto():
     """编译所有 .proto 文件"""
@@ -34,8 +32,13 @@ def compile_proto():
     proto_dir = Path("src/proto")
     out_dir = Path("src/s2cpy/generated")
 
-    # 创建输出目录
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not out_dir.exists():
+        # 创建输出目录
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        shutil.rmtree(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
 
     # 找到所有 .proto 文件
     proto_files = list(proto_dir.glob("*.proto"))

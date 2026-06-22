@@ -74,7 +74,7 @@ class LiveData(Protocol):
 
 
 @dataclasses.dataclass
-class AssetLiveData:
+class AssetLiveData(LiveData):
     """
     表示具体的数据
     """

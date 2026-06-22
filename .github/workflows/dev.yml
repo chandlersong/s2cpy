@@ -27,6 +27,7 @@ jobs:
       # 推荐使用 --frozen 保证锁定版本
       - name: Sync projectuv run pytest --collectonly -m "not manul"
         run: uv sync --frozen --all-extras --dev
-
+      - name: Run pytest
+        run: uv run python generate_protobuf
       - name: Run pytest
         run: uv run pytest -m "not manual" -q --tb=no

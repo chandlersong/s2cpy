@@ -15,8 +15,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
 COPY . .
+
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev &&\
+    uv run python generate_protobuf.py &&\
+    mkdir -p /app/cache
+
 
 # ==================== 最终镜像 ====================
 FROM python:3.13-slim
