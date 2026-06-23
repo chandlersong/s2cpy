@@ -147,8 +147,9 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
                 if history_list is None:
                     continue
 
-                if isinstance(history_list, history_data_pb2.PolyMarketHistoryList):
+                if not isinstance(history_list, history_data_pb2.PolyMarketHistoryList):
                     logger.warning(f"收到不明类型的数据,类型{type(history_list)},数据:{history_list}")
+                    continue
 
                 if history_list.timestamp > max_timestamp:
                     yield history_list

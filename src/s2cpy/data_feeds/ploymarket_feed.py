@@ -406,7 +406,6 @@ def query_market_history(client: ClobClient, market: Market, interval: TimeInter
         logger.warning(f"{market_slug}没有可交易的币")
         return
     for idx, asset_id in enumerate(clob_token_ids):
-        # FUTURE: fidelity以后根据inteval来计算
         fidelity = int(interval.to_seconds() / 60)
         params = PricesHistoryParams(
             market=asset_id,
