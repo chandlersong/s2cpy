@@ -1,2 +1,2 @@
-[sync]
+[sync_server]
 sync_cache_folder = "/app/cache"

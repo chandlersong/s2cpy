@@ -25,7 +25,7 @@ CREATE TABLE polymarket_history (
 -- that includes the time column. This avoids TS103 (unique constraint must
 -- include partitioning column).
 ALTER TABLE polymarket_history
-  ADD CONSTRAINT polymarket_history_pkey PRIMARY KEY (market_id, timestamp);
+  ADD CONSTRAINT polymarket_history_pkey PRIMARY KEY (asset_id, timestamp);
 
 -- Create hypertable on integer timestamp (epoch milliseconds).
 -- Provide chunk_time_interval in the same units (ms). Example uses 7 days.
@@ -41,7 +41,7 @@ SELECT create_hypertable(
 ALTER TABLE polymarket_history SET (
   timescaledb.enable_columnstore,
   timescaledb.orderby = 'timestamp DESC',
-  timescaledb.segmentby = 'market_id'
+  timescaledb.segmentby = 'asset_id'
 );
 
 

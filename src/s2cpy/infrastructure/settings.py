@@ -40,10 +40,19 @@ class PolyMarketRelayerAccount(AccountBase):
     builder_pass_phrase: str = None
 
 
-class SyncSetting(BaseModel):
+class SyncServerSetting(BaseModel):
     sync_cache_folder: str = "/app/cache"  # DEBUG / INFO / WARNING / ERROR
     port: int = 50051
+
+
+class SyncClientSetting(BaseModel):
+    port: int = 50051
     server_address: str = "localhost"
+    db_name: str = ""
+    db_user: str = ""
+    db_password: str = ""
+    db_port: int = 5432
+    db_host: str = ""
 
 
 # 兼容命名：保留原来的占位符名（如果外部引用了 AccountSettings ）
@@ -57,7 +66,8 @@ class AppSettings(BaseSettings):
     debug: bool = False
     proxy_url: Optional[str] = None
     log: LogSetting = LogSetting()
-    sync: SyncSetting = SyncSetting()
+    sync_server: SyncServerSetting = SyncServerSetting()
+    sync_client: SyncClientSetting = SyncClientSetting()
     # pydantic-settings 配置
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",  # 支持 DATABASE__HOST=xxx 这种环境变量

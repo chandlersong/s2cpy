@@ -1,9 +1,11 @@
 import queue
+import time
 from concurrent import futures
 from pathlib import Path
 from typing import List, Iterator, Tuple
 
 import grpc
+from collections import Counter
 from apscheduler.triggers.cron import CronTrigger
 
 from s2cpy.generated import history_data_pb2, history_data_pb2_grpc
@@ -37,10 +39,9 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
         self._cache_queue = queue.Queue()
         self.port = port
 
-    def handler_new_data(self, topic, data: LiveData):
+    def handler_new_data(self, _, data: LiveData):
         if isinstance(data, PolyMarketHistoryPriceLiveData):
             history = history_data_pb2.PolyMarketHistory()
-            history.table = data.table
             history.series_id = data.series_id
             history.series_slug = data.series_slug
             history.event_id = data.event_id
@@ -58,11 +59,21 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
     def persist_cache(self):
         if len(self._cache.history_list) == 0:
             return
+        timestamp = now_unix_ms_utc()
         cache = self._cache
+        cache.timestamp = timestamp
         self._cache = history_data_pb2.PolyMarketHistoryList()
         cache_entry = cache.SerializeToString()
-        timestamp = now_unix_ms_utc()
-        cache = timestamp
+        # Check for duplicate timestamps inside the PolyMarketHistoryList
+        try:
+            ts_list = [h.timestamp for h in cache.history_list]
+            counts = Counter(ts_list)
+            duplicates = [(ts, cnt) for ts, cnt in counts.items() if cnt > 1]
+            if duplicates:
+                logger.warning(f"persist_cache: found duplicate timestamps in cache: {duplicates}")
+        except Exception:
+            # Defensive: if the proto structure is unexpected, don't fail persist
+            logger.exception("persist_cache: failed to check duplicate timestamps")
         cache_file_name = self._cache_root / f"{timestamp}.bin"
         with open(cache_file_name, "wb") as f:
             f.write(cache_entry)
@@ -140,6 +151,7 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
 
                 if history_list.timestamp > max_timestamp:
                     yield history_list
+                    time.sleep(2)
         finally:
             try:
                 reader_future.cancel()

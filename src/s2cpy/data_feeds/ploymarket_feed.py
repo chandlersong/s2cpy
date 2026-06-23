@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import datetime
+import time
 from dataclasses import dataclass
 from types import CoroutineType
 from typing import Any, Dict, Optional, List, Generator
@@ -318,7 +319,7 @@ class SeriesHistoryDataFeed(DataFeed):
         task_id = f"series_history_{"_".join(self._series_ids)}"
         scheduler.add_job(
             self.refresh_markets,
-            trigger=CronTrigger.from_crontab(self._refresh_market_corn),   # 秒 分 时 日 月 周
+            trigger=CronTrigger.from_crontab(self._refresh_market_corn),  # 秒 分 时 日 月 周
             id=task_id,
             replace_existing=True
         )
@@ -363,9 +364,9 @@ class SeriesHistoryDataFeed(DataFeed):
                 data.series_slug = wrapped_market.series_slug
                 data.event_id = wrapped_market.event_id
                 data.event_slug = wrapped_market.event_slug
-                data.table = "polymarket_1h_history"
                 topic = f"{wrapped_market.series_id}_{interval_str}_history"
                 self._handler(topic, data)
+            time.sleep(2)
 
     async def refresh_markets(self):
         # Use timezone-aware UTC now to avoid comparing naive and aware datetimes
@@ -405,20 +406,24 @@ def query_market_history(client: ClobClient, market: Market, interval: TimeInter
         logger.warning(f"{market_slug}没有可交易的币")
         return
     for idx, asset_id in enumerate(clob_token_ids):
+        # FUTURE: fidelity以后根据inteval来计算
+        fidelity = int(interval.to_seconds() / 60)
         params = PricesHistoryParams(
             market=asset_id,
             interval=interval.to_str(),
             start_ts=start_time,
-            end_ts=end_time
+            end_ts=end_time,
+            fidelity=fidelity
         )
         asset_slug = f"{market_slug}_{out_comes[idx]}"
         history = client.get_prices_history(params=params)['history']
         for h in history:
+            t = interval.get_close_unix_seconds(timestamp=h['t'])
             yield PolyMarketHistoryPriceLiveData(
                 market_id=market.id,
                 market_slug=market_slug,
                 asset_id=asset_id,
                 asset_slug=asset_slug,
-                timestamp=h['t'],
+                timestamp=t,
                 price=h['p'],
             )

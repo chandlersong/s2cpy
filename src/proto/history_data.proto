@@ -26,17 +26,16 @@ message ServerMessage {
 }
 
 message PolyMarketHistory {
-    string table = 1;
-    string series_id=2;
-    string series_slug= 3;
-    string event_id= 4;
-    string event_slug= 5;
-    string market_id= 6;
-    string market_slug= 7;
-    string asset_id= 8;
-    string asset_slug= 9;
-    int64 timestamp= 10;
-    double price= 11;
+    string series_id=1;
+    string series_slug= 2;
+    string event_id= 3;
+    string event_slug= 4;
+    string market_id= 5;
+    string market_slug= 6;
+    string asset_id= 7;
+    string asset_slug= 8;
+    int64 timestamp= 9;
+    double price= 10;
 }
 
 message PolyMarketHistoryList {
