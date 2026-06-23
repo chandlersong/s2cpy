@@ -635,3 +635,21 @@ class PolyMarketHistoryPriceLiveData(LiveData):
     def __repr__(self) -> str:
         return f"PolyMarketHistoryPriceLiveData({self.market_slug!r}, {self.asset_slug!r}, ts={self.timestamp}, price={self.price})"
 
+@dataclasses.dataclass
+class PolyMarketHistoryPricePK:
+    asset_id: str = None
+    timestamp: int = None
+    slug : str= None
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PolyMarketHistoryPricePK):
+            return NotImplemented
+        return (self.asset_id == other.asset_id) and (self.timestamp == other.timestamp)
+
+    def __hash__(self) -> int:
+        # Tuple-hash of the two primary key fields; None is hashable.
+        return hash((self.asset_id, self.timestamp))
+
+    def __str__(self) -> str:
+        # Print only slug and timestamp as requested
+        return f"{self.slug}:{self.timestamp}"

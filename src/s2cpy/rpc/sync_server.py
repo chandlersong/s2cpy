@@ -12,7 +12,7 @@ from s2cpy.generated import history_data_pb2, history_data_pb2_grpc
 from s2cpy.infrastructure.async_tools import get_task_scheduler
 from s2cpy.infrastructure.time import now_unix_ms_utc
 from s2cpy.model.core_model import LiveData
-from s2cpy.model.polymarke_core import PolyMarketHistoryPriceLiveData
+from s2cpy.model.polymarke_core import PolyMarketHistoryPriceLiveData, PolyMarketHistoryPricePK
 from loguru import logger
 
 
@@ -66,11 +66,12 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
         cache_entry = cache.SerializeToString()
         # Check for duplicate timestamps inside the PolyMarketHistoryList
         try:
-            ts_list = [h.timestamp for h in cache.history_list]
-            counts = Counter(ts_list)
-            duplicates = [(ts, cnt) for ts, cnt in counts.items() if cnt > 1]
-            if duplicates:
-                logger.warning(f"persist_cache: found duplicate timestamps in cache: {duplicates}")
+            pk_list = [PolyMarketHistoryPricePK(asset_id=h.asset_id, timestamp=h.timestamp,slug=h.asset_slug) for h in
+                       cache.history_list]
+            counts = Counter(pk_list)
+            duplicates = [(pk, cnt) for pk, cnt in counts.items() if cnt > 1]
+            for pk, cnt in duplicates:
+                logger.warning(f"find duplicate history {pk}, counts {cnt}")
         except Exception:
             # Defensive: if the proto structure is unexpected, don't fail persist
             logger.exception("persist_cache: failed to check duplicate timestamps")

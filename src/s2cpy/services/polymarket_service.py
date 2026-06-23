@@ -7,6 +7,7 @@ from loguru import logger
 
 from s2cpy.generated import history_data_pb2
 from s2cpy.infrastructure.settings import SyncClientSetting
+from s2cpy.model.polymarke_core import PolyMarketHistoryPricePK
 
 
 class HistoryDataService:
@@ -73,13 +74,14 @@ class HistoryDataService:
         cache = {}
         for h in history_list.history_list:
             # Convert epoch milliseconds (assumed) to RFC3339 timestamp in UTC
-            if h.timestamp in cache:
-                p = cache[h.timestamp]
+            pk = PolyMarketHistoryPricePK(asset_id=h.asset_id, timestamp=h.timestamp, slug=h.asset_slug)
+            if pk in cache:
+                p = cache[pk]
                 if p != h.price:
                     logger.warning(
                         f"保存polymarket_history发现重复的timestamp {h.timestamp}，但价格不同，之前的价格{p}，新的价格{h.price}，将覆盖之前的价格")
                 continue
-            cache[h.timestamp] = h.price
+            cache[pk] = h.price
             try:
                 ts = datetime.datetime.fromtimestamp(h.timestamp, datetime.timezone.utc).isoformat()
             except Exception:
