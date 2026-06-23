@@ -28,6 +28,6 @@ jobs:
       - name: Sync projectuv run pytest --collectonly -m "not manul"
         run: uv sync --frozen --all-extras --dev
       - name: Run pytest
-        run: uv run python generate_protobuf
+        run: uv run python generate_protobuf.py
       - name: Run pytest
         run: uv run pytest -m "not manual" -q --tb=no
