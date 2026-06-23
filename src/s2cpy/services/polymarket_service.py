@@ -13,7 +13,7 @@ class HistoryDataService:
 
     def __init__(self, config: SyncClientSetting):
         logger.info(
-            f"数据库地址{config.server_address}:{config.port}，数据库名称：{config.db_name},用户名:{config.db_user}")
+            f"数据库地址{config.db_host}:{config.port}，数据库名称：{config.db_name},用户名:{config.db_user}")
         conn = psycopg.connect(
             f"host={config.db_host} dbname={config.db_name} user={config.db_user} password={config.db_password} port={config.db_port}"
         )
