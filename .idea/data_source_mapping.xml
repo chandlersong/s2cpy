@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$PROJECT_DIR$/db/sync_db_initial.sql" value="e5390c29-3b02-487c-84f7-17d35fe568b6" />
+  </component>
+</project>
