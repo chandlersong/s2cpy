@@ -419,7 +419,11 @@ def query_market_history(client: ClobClient, market: Market, interval: TimeInter
         asset_slug = f"{market_slug}_{out_comes[idx]}"
         history = client.get_prices_history(params=params)['history']
         for h in history:
-            t = interval.get_close_unix_seconds(timestamp=h['t'])
+            ts = h['t']
+            if ts > end_time:
+                # 真实情况，有时候会发生脏数据。过滤掉
+                continue
+            t = interval.get_close_unix_seconds(timestamp=ts)
             yield PolyMarketHistoryPriceLiveData(
                 market_id=market.id,
                 market_slug=market_slug,
