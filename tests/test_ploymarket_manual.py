@@ -1,15 +1,15 @@
 import asyncio
 import json
 import os
+
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7891'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7891'
 
 from py_clob_client_v2.constants import POLYGON
 
-
 import pandas as pd
 
-from s2cpy.exchange.polymarket_tools import split_pusdt
+from s2cpy.exchange.polymarket_tools import split_pusdt, MarketWithAddition
 from s2cpy.infrastructure.time import get_unix_seconds_utc, TimeInterval
 
 from py_clob_client_v2 import Side, ClobClient
@@ -369,8 +369,8 @@ async def test_query_market_history():
     )
     data_feed = SeriesHistoryDataFeed(["10151"], TimeInterval.OneHour)
     await data_feed.refresh_markets()
-    market = data_feed.open_market[0]
+    market = data_feed.open_market[0].market
     logger.info(f"market slug: {market.slug},start at {market.startDate}")
-    live_data_stream = query_market_history(clob_client,market, interval=TimeInterval.OneHour)
+    live_data_stream = query_market_history(clob_client, market, interval=TimeInterval.OneHour)
     for live_data in live_data_stream:
-        logger.info(f"live_data:{live_data}")
+        logger.info(f"asset:{live_data.asset_slug},timestamp:{live_data.timestamp},price:{live_data.price}")

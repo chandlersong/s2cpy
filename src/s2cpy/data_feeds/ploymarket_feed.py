@@ -327,7 +327,7 @@ class SeriesHistoryDataFeed(DataFeed):
         await self.fetch_history(2)
         scheduler.add_job(
             self.fetch_history,
-            trigger=CronTrigger.from_crontab('2 * * * *'),  # 秒 分 时 日 月 周
+            trigger=CronTrigger.from_crontab('* 2 * * *'),  # 秒 分 时 日 月 周
             id=f"series_history_1h_refresh_task",
             replace_existing=True
         )
