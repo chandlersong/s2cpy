@@ -221,7 +221,7 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
         scheduler = get_task_scheduler()
         scheduler.add_job(
             self.persist_cache,
-            trigger=CronTrigger.from_crontab('0 * * * *'),  # 秒 分 时 日 月 周
+            trigger=CronTrigger.from_crontab('* * * * *'),
             id="history_sync_server_persist_cache",
             replace_existing=True
         )

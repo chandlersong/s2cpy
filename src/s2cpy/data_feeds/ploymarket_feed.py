@@ -319,7 +319,7 @@ class SeriesHistoryDataFeed(DataFeed):
         task_id = f"series_history_{"_".join(self._series_ids)}"
         scheduler.add_job(
             self.refresh_markets,
-            trigger=CronTrigger.from_crontab(self._refresh_market_corn),  # 秒 分 时 日 月 周
+            trigger=CronTrigger.from_crontab(self._refresh_market_corn),
             id=task_id,
             replace_existing=True
         )
@@ -327,7 +327,7 @@ class SeriesHistoryDataFeed(DataFeed):
         await self.fetch_history(2)
         scheduler.add_job(
             self.fetch_history,
-            trigger=CronTrigger.from_crontab('0 2 * * *'),  # 秒 分 时 日 月 周
+            trigger=CronTrigger.from_crontab('2 * * * *'),
             id=f"series_history_1h_refresh_task",
             replace_existing=True
         )
