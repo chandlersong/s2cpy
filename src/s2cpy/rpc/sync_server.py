@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Iterator, Tuple
 
 import grpc
+import asyncio
 from collections import Counter
 from apscheduler.triggers.cron import CronTrigger
 
@@ -220,8 +221,8 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
         scheduler = get_task_scheduler()
         scheduler.add_job(
             self.persist_cache,
-            trigger=CronTrigger.from_crontab('*/10 * * * *'),  # 秒 分 时 日 月 周
-            id="HistorySyncServerPersistCache",
+            trigger=CronTrigger.from_crontab('* * * * *'),  # 秒 分 时 日 月 周
+            id="history_sync_server_persist_cache",
             replace_existing=True
         )
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -232,7 +233,12 @@ class HistorySyncServer(history_data_pb2_grpc.SyncServerServicer):
         server.add_insecure_port(f'[::]:{self.port}')
         logger.info(f"服务器启动在 [::]:{self.port}")
         server.start()
-        server.wait_for_termination()
+        # server.wait_for_termination() is a blocking call which would block the
+        # asyncio event loop and prevent AsyncIOScheduler jobs from running.
+        # Run the blocking waiter in a thread executor so the event loop (and
+        # scheduler) can continue to run scheduled async jobs.
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, server.wait_for_termination)
 
 
 if __name__ == '__main__':

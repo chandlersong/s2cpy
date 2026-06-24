@@ -32,7 +32,7 @@ async def main():
                   "10041", ]
     data_feed = SeriesHistoryDataFeed(series_ids, interval=TimeInterval.OneHour)
     data_feed.subscribe(sync_server.handler_new_data)
-    # await data_feed.start()
+    await data_feed.start()
     await sync_server.start()
     while True:
         await asyncio.sleep(60 * 60)

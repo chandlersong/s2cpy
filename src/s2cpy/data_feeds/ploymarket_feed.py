@@ -324,9 +324,9 @@ class SeriesHistoryDataFeed(DataFeed):
             replace_existing=True
         )
         logger.info(f"PolyMarket history:Started to initial history data")
-        await self.fetch__history(2)
+        await self.fetch_history(2)
         scheduler.add_job(
-            self.fetch__history,
+            self.fetch_history,
             trigger=CronTrigger.from_crontab('2 * * * *'),  # 秒 分 时 日 月 周
             id=f"series_history_1h_refresh_task",
             replace_existing=True
@@ -336,11 +336,12 @@ class SeriesHistoryDataFeed(DataFeed):
         interval_str = self._interval.to_str()
         return [f"{series_id}_{interval_str}_history" for series_id in self._series_ids]
 
-    async def fetch__history(self, start_type: int = 1):
+    async def fetch_history(self, start_type: int = 1):
         """
         :param start_type: 1 代表时一个小时前，2代表直接取market的开始时间
         :return:
         """
+        logger.info(f"PolyMarket History:Fetching history for 1h,will fetch open markets num {len(self._open_market)}")
         now_timestamp = get_unix_seconds_utc()
         clob_client = ClobClient(
             host=CLOB_HOST,
@@ -372,6 +373,7 @@ class SeriesHistoryDataFeed(DataFeed):
         # Use timezone-aware UTC now to avoid comparing naive and aware datetimes
         # returned by the API models. Convert naive datetimes to UTC as a fallback.
         new_open_market = []
+        logger.info(f"polymarket history start to refresh open markets")
         for series_id in self._series_ids:
             try:
                 open_markets, _ = await split_series_markets(series_id)
@@ -393,9 +395,9 @@ def query_market_history(client: ClobClient, market: Market, interval: TimeInter
     :return:
     """
     if start_time is None:
-        start_time = int(market.startDate.timestamp())
-    start_time = interval.get_close_unix_seconds(timestamp=start_time)
-    end_time = interval.get_close_now_second()
+        start_time = interval.get_close_unix_seconds(int(market.startDate.timestamp()))
+    # 看了一下真实数据。真实数据会晚很多。而且随机，所以这里延后30s。当然因为现在是查询一小时。
+    end_time = interval.get_close_now_second() + 30
     out_comes = market.outcomes
     clob_token_ids = market.clobTokenIds
     market_slug = market.slug
