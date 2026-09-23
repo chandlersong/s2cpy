@@ -13,10 +13,6 @@ except ImportError:  # pragma: no cover - defensive fallback for test environmen
 
     psycopg = _PsycopgFallback()
 
-from s2cpy.model.core_model import OptionType
-from s2cpy.model.okx_option import OkxOption
-
-
 @dataclasses.dataclass
 class PostgresqlInfo:
     user: str

@@ -8,7 +8,7 @@ from s2cpy.model.core_model import Instrument, OptionType
 
 
 @dataclasses.dataclass(eq=False, kw_only=True)
-class OkxOption(Instrument):
+class Option(Instrument):
     strike: float  # 行权价
     multiplier: float
     base_ccy: str

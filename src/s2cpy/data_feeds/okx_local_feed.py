@@ -5,7 +5,7 @@ import psycopg
 
 from s2cpy.core.postgresql_tools import PostgresqlInfo
 from s2cpy.model.core_model import OptionType
-from s2cpy.model.okx_option import OkxOption
+from s2cpy.model.option import Option
 
 
 class OkxOptionRepository:
@@ -40,7 +40,7 @@ class OkxOptionRepository:
 
         return underlying, quote_ccy, expiration, strike_price, option_type
 
-    def query_option_kline(self, ts: Union[datetime.datetime, str]) -> List[OkxOption]:
+    def query_option_kline(self, ts: Union[datetime.datetime, str]) -> List[Option]:
         query = """
                 SELECT i.inst_identify, i.exp_time, i.base_ccy
                 FROM okx_kline_history AS h
@@ -72,7 +72,7 @@ class OkxOptionRepository:
                 raise ValueError(f"Unexpected OKX option identifier: {identify!r}") from exc
 
             options.append(
-                OkxOption(
+                Option(
                     identify=identify,
                     mini_ticker_size=1,
                     validate_before=exp_time,
@@ -85,5 +85,5 @@ class OkxOptionRepository:
 
         return options
 
-    def query_options_by_close_time(self, close_time: Union[datetime.datetime, str]) -> List[OkxOption]:
+    def query_options_by_close_time(self, close_time: Union[datetime.datetime, str]) -> List[Option]:
         return []
