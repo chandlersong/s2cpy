@@ -5,7 +5,7 @@ import psycopg
 
 from s2cpy.core.postgresql_tools import PostgresqlInfo
 from s2cpy.model.core_model import OptionType
-from s2cpy.model.option import Option
+from s2cpy.model.option import CMOption
 
 
 class OkxOptionRepository:
@@ -40,7 +40,7 @@ class OkxOptionRepository:
 
         return underlying, quote_ccy, expiration, strike_price, option_type
 
-    def query_option_kline(self, ts: Union[datetime.datetime, str]) -> List[Option]:
+    def query_option_kline(self, ts: Union[datetime.datetime, str]) -> List[CMOption]:
         """
          从 okx_line_history这张表里面读取candle_begin_time为ts的所有option，然后转换成OkxOption对象返回
          okx_instrument.id = okx_line_history.instrument_id.有些数据需要从okx_instrument表里获取。
@@ -102,7 +102,7 @@ class OkxOptionRepository:
                 raise ValueError(f"Unexpected OKX option identifier: {identify!r}") from exc
 
             options.append(
-                Option(
+                CMOption(
                     identify=identify,
                     mini_ticker_size=1,
                     validate_before=exp_time,
@@ -117,5 +117,5 @@ class OkxOptionRepository:
 
         return options
 
-    def query_options_by_close_time(self, close_time: Union[datetime.datetime, str]) -> List[Option]:
+    def query_options_by_close_time(self, close_time: Union[datetime.datetime, str]) -> List[CMOption]:
         return []

@@ -1,10 +1,10 @@
-from s2cpy.core.option_func import sort_options_by_strike
+from s2cpy.core.option import sort_options_by_strike
 from s2cpy.model.core_model import OptionType
-from s2cpy.model.option import Option
+from s2cpy.model.option import CMOption
 
 
-def make_option(strike: float, identify: str) -> Option:
-    return Option(
+def make_option(strike: float, identify: str) -> CMOption:
+    return CMOption(
         identify=identify,
         strike=strike,
         multiplier=1.0,
