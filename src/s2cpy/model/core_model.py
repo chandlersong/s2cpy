@@ -4,10 +4,16 @@
 import abc
 import dataclasses
 from typing import Protocol, Optional, Callable, Any, List
+from enum import Enum
 
 """
 用户发出一些
 """
+
+
+class OptionType(Enum):
+    Call = 1
+    Put = 2
 
 
 @dataclasses.dataclass

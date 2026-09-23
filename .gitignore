@@ -12,3 +12,5 @@ wheels/
 /docs/tasks/
 /src/s2cpy/generated/
 /cache/
+/tests/test_okx_option_local.py
+/tests/.env.pgsql
