@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import datetime
 
 from s2cpy.model.core_model import Instrument, OptionType
 
@@ -13,3 +14,5 @@ class Option(Instrument):
     multiplier: float
     base_ccy: str
     option_type: OptionType
+    premium: float
+    premium_ts: datetime
