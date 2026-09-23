@@ -1,7 +1,8 @@
 import datetime
 from unittest.mock import patch
 
-from s2cpy.core.postgresql_tools import OkxOptionRepository, PostgresqlInfo
+from s2cpy.core.postgresql_tools import PostgresqlInfo
+from s2cpy.data_feeds.okx_local_feed import OkxOptionRepository
 from s2cpy.model.core_model import OptionType
 
 
