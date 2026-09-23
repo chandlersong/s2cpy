@@ -1,10 +1,10 @@
 from typing import Final, Literal
 
-from s2cpy.model.core_model import Asset
+from s2cpy.model.core_model import Instrument
 
-USDC: Final[Asset] = Asset("USDC")
+USDC: Final[Instrument] = Instrument("USDC")
 
-USDT: Final[Asset] = Asset("USDT")
+USDT: Final[Instrument] = Instrument("USDT")
 
 SIDE_LONG:int = 1
 SIDE_SHORT:int  = -1

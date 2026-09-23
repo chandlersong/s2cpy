@@ -31,7 +31,7 @@ class Position:
 
 
 @dataclasses.dataclass(eq=False)
-class Asset:
+class Instrument:
     """
     identify: 应该是有意义的。方便用户去处理一些特殊逻辑。比如说多资产的时候，通过字段去区分。
     external_id：看情况，有些有，有些没有，最好是在交易所的标识。
@@ -47,7 +47,7 @@ class Asset:
     extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Asset):
+        if not isinstance(other, Instrument):
             return NotImplemented
         # Assets are considered equal if their id is equal. Other metadata
         # (external_id, validate_before) is not part of identity used for
@@ -62,7 +62,7 @@ class Asset:
 
 @dataclasses.dataclass
 class OrderInfo:
-    asset: Asset
+    asset: Instrument
     quantity: float
 
 
@@ -79,7 +79,7 @@ class AssetLiveData(LiveData):
     表示具体的数据
     """
     topic: str
-    asset: Asset
+    asset: Instrument
     data: Any
 
 
@@ -159,7 +159,7 @@ class Account(Protocol):
         """
         pass
 
-    def create_order(self, asset: Asset, **kwargs) -> Optional[str]:
+    def create_order(self, asset: Instrument, **kwargs) -> Optional[str]:
         """
         placeHolder的方法，因为要支持多交易所的支持。
         过早的统一参数，太麻烦。

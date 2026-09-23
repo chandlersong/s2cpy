@@ -18,7 +18,7 @@ from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import periodic_runner
 from s2cpy.infrastructure.settings import PolyMarketRelayerAccount
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds, get_unix_seconds_utc
-from s2cpy.model.core_model import Account, Asset, Position, Order, DataHandler, AssetLiveData, LiveData
+from s2cpy.model.core_model import Account, Instrument, Position, Order, DataHandler, AssetLiveData, LiveData
 
 from datetime import datetime, timezone
 
@@ -65,7 +65,7 @@ class AssertInfo:
     但是实际情况是一层，都有同步的需求。
     所以暂时先这么考虑吧。
     """
-    asset: Asset
+    asset: Instrument
     position: Position
 
 
@@ -103,7 +103,7 @@ class PolyLiquidityProviderAccount(Account):
 
     """
 
-    def create_order(self, asset: Asset, **kwargs) -> Optional[str]:
+    def create_order(self, asset: Instrument, **kwargs) -> Optional[str]:
         """
          TODO：
          1. 动态的获得这个ticker(缓存机制)
@@ -153,7 +153,7 @@ class PolyLiquidityProviderAccount(Account):
         except Exception as e:
             logger.error(f"Create order error: {e}")
 
-    def cancel_order_by_asset(self, asset: Asset):
+    def cancel_order_by_asset(self, asset: Instrument):
         order_ids = []
         asset_id = asset.external_id
         for order in self._open_orders.values():
@@ -378,7 +378,7 @@ class PolyLiquidityProviderAccount(Account):
                 else:
                     validate_before = str_iso_datetime_to_unix_seconds(market_cache[market_slug].endDate)
 
-                asset = Asset(
+                asset = Instrument(
                     identify=asset_id,
                     external_id=position.asset,
                     validate_before=validate_before,

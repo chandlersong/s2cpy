@@ -322,15 +322,19 @@ async def test_find_event_series_id():
     cfg = get_global_config()
     setup_global_logging(cfg.log)
     setup_global_logging(cfg.log)
-    event_slugs = ["bitcoin-above-on-june-19-2026",
-                   "what-price-will-bitcoin-hit-june-15-21-2026",
-                   "bitcoin-price-on-june-19-2026"]
+    event_slugs = [
+                   "what-price-will-ethereum-hit-in-september-2026"]
+
     for event_slug in event_slugs:
         api = RestfulAPI()
         event = await api.get_event_by_slug(EventGetBySlugRequest.build(slug=event_slug))
         series = event.series
+        if series is None:
+            logger.info(f"{event_slug} has no series")
+            continue
         for s in series:
             logger.info(f"event slug: {event_slug},series id:{s.id},series slug:{s.slug}")
+            logger.info(f"- {s.id}")
     # logger.info(f"market slug : {zero_rate_cuts.slug},event_negRisk:{zero_rate_cuts.negRisk}")
     # account_config = cfg.get_default_account()
     # account = PolyLiquidityProviderAccount(account_config)
@@ -349,11 +353,11 @@ async def test_get_open_markets_by_series_id():
     例子代码，通过series id获得最新
     :return:
     """
-    data_feed = SeriesHistoryDataFeed(["41"], TimeInterval.OneHour)
+    data_feed = SeriesHistoryDataFeed(["10017"], TimeInterval.OneHour)
     await data_feed.refresh_markets()
     markets = data_feed.open_market
     for market in markets:
-        logger.info(f"market slug: {market.slug}")
+        logger.info(f"market slug: {market.market.slug},market id:{market.market.id}")
 
 
 @pytest.mark.manual

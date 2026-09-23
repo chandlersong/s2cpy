@@ -17,7 +17,7 @@ from s2cpy.exchange.polymarket_ws import PolymarketWS
 from s2cpy.infrastructure.async_tools import get_task_scheduler
 from s2cpy.infrastructure.time import TimeInterval, now_unix_ms_utc, str_iso_datetime_to_unix_seconds, \
     get_unix_seconds_utc
-from s2cpy.model.core_model import DataFeed, DataHandler, Asset, AssetLiveData
+from s2cpy.model.core_model import DataFeed, DataHandler, Instrument, AssetLiveData
 from s2cpy.model.polymarke_core import PolyMarketHistoryPriceLiveData, CLOB_HOST
 from s2cpy.model.polymarket_io import Market, MarketGetBySlugRequest, SeriesGetRequest, EventGetByIdRequest
 from loguru import logger
@@ -43,7 +43,7 @@ class CryptoRepeatDataFeed(DataFeed):
         self._rotation_task: Optional[asyncio.Task] = None
         self._handler: DataHandler = lambda _key, _val: (_ for _ in (0,)).throw(
             AttributeError(f"CryptoRepeatDataFeed-{coin_name}-{interval},handler没有设置, 请检查代码"))
-        self._asset: Dict[str, Asset] = dict()
+        self._asset: Dict[str, Instrument] = dict()
 
     @property
     def name(self) -> str:
@@ -169,7 +169,7 @@ class OneMarketDataFeed(DataFeed):
             AttributeError(f"polymarket OneMarketDataFeed-{market_slug},handler没有设置, 请检查代码"))
         # Background rotation task (asyncio.Task) if started via start()
         self._rotation_task: Optional[asyncio.Task] = None
-        self._asset: Dict[str, Asset] = dict()
+        self._asset: Dict[str, Instrument] = dict()
 
     @property
     def name(self) -> str:

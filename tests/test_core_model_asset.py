@@ -1,9 +1,9 @@
-from s2cpy.model.core_model import Asset
+from s2cpy.model.core_model import Instrument
 
 
 def test_asset_equality_and_hash():
-    a1 = Asset(identify="asset-1", external_id="ext-a", validate_before=None)
-    a2 = Asset(identify="asset-1", external_id="ext-b", validate_before=123456)
+    a1 = Instrument(identify="asset-1", external_id="ext-a", validate_before=None)
+    a2 = Instrument(identify="asset-1", external_id="ext-b", validate_before=123456)
 
     # identity is based on id
     assert a1 == a2
@@ -18,7 +18,7 @@ def test_asset_equality_and_hash():
 
 
 def test_asset_inequality():
-    a1 = Asset(identify="asset-1")
-    a3 = Asset(identify="asset-3")
+    a1 = Instrument(identify="asset-1")
+    a3 = Instrument(identify="asset-3")
     assert a1 != a3
 

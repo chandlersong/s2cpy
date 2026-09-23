@@ -15,9 +15,9 @@ from py_builder_relayer_client.models import Transaction, RelayerTxType, SafeTra
     DepositWalletCall, TransactionType
 from py_clob_client_v2 import TickSize
 
-from s2cpy.exchange.polymarket_api import RestfulAPI
+from s2cpy.exchange.polymarket_api import RestfulAPI, PolymarketNotFoundError
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
-from s2cpy.model.core_model import Asset
+from s2cpy.model.core_model import Instrument
 from s2cpy.model.polymarket_io import Market, MarketGetByIdRequest, EventGetByIdRequest, SeriesGetRequest
 from loguru import logger
 
@@ -162,7 +162,7 @@ def split_pusdt(client: RelayClient, condition_id: str, amount: int, wallet_addr
     logger.debug(f"wallet address:{wallet_address},Split sent successfully, tx: {tx3}")
 
 
-def convert_markets_2_assets(market: Market) -> Dict[str, Asset]:
+def convert_markets_2_assets(market: Market) -> Dict[str, Instrument]:
     """
     把market转换成assert
     :param market:
@@ -171,11 +171,11 @@ def convert_markets_2_assets(market: Market) -> Dict[str, Asset]:
     if market.endDate is None:
         raise ValueError(f"market:{market.slug} market.endDate is None")
     validate_before = str_iso_datetime_to_unix_seconds(market.endDate)
-    result: Dict[str, Asset] = {}
+    result: Dict[str, Instrument] = {}
     outcomes = market.outcomes
     slug = market.slug
     for index, token_id in enumerate(market.clobTokenIds or []):
-        result[token_id] = Asset(
+        result[token_id] = Instrument(
             identify=f"{slug}-{outcomes[index]}",
             external_id=token_id,
             mini_ticker_size=float(market.orderPriceMinTickSize or 0.01),
@@ -185,7 +185,7 @@ def convert_markets_2_assets(market: Market) -> Dict[str, Asset]:
     return result
 
 
-async def asserts_by_market_id(market_id: str) -> Dict[str, Asset]:
+async def asserts_by_market_id(market_id: str) -> Dict[str, Instrument]:
     """
     把market转换成assert
     :param market_id: market id
@@ -236,7 +236,7 @@ def is_valid_tick_size(s: str) -> bool:
     return False
 
 
-def create_order_args(asset: Asset, price: float, size: float, side: int) -> Dict[str, Any]:
+def create_order_args(asset: Instrument, price: float, size: float, side: int) -> Dict[str, Any]:
     return {
         "token_id": asset.external_id,
         "price": price,
@@ -275,7 +275,11 @@ async def split_series_markets(series_id: str) -> tuple[List[MarketWithAddition]
         logger.warning(f"{series.slug} has no events")
         return open_markets, close_markets
     for event in events:
-        e = await api.get_event_by_id(EventGetByIdRequest.build(id=event.id))
+        try:
+            e = await api.get_event_by_id(EventGetByIdRequest.build(id=event.id))
+        except PolymarketNotFoundError as ex:
+            logger.exception(f"failed to fetch event {event.id}")
+            continue
         event_slug = event.slug
         if event_slug is None:
             logger.warning(f"event {event.id} has no slug")
