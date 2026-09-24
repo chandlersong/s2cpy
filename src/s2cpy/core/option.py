@@ -3,7 +3,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 from matplotlib import pyplot as plt
 
-from s2cpy.model.option import CMOption
+from s2cpy.model.option import CMOption, ExpirationDate
 
 
 def sort_options_by_strike(options: List[CMOption], price: float) -> Tuple[List[CMOption], int]:
@@ -31,12 +31,12 @@ def sort_options_by_strike(options: List[CMOption], price: float) -> Tuple[List[
 # ==================== 策略类 ====================
 class OptionStrategy:
     def __init__(
-        self,
-        options: List[CMOption],
-        fee_per_contract: float = 0.0,
-        fee_rate: float = 0.0,
-        include_close_fee: bool = True,
-        name: str = "OKX 币本位策略"
+            self,
+            options: List[CMOption],
+            fee_per_contract: float = 0.0,
+            fee_rate: float = 0.0,
+            include_close_fee: bool = True,
+            name: str = "OKX 币本位策略"
     ):
         self.options = options
         self.fee_per_contract = fee_per_contract
@@ -60,7 +60,7 @@ class OptionStrategy:
     def plot_payoff(self, S: Optional[np.ndarray] = None, figsize=(13, 7)):
         if S is None:
             strikes = [opt.strike for opt in self.options]
-            S = np.linspace(min(strikes)*0.6, max(strikes)*1.5, 600)
+            S = np.linspace(min(strikes) * 0.6, max(strikes) * 1.5, 600)
 
         S = np.maximum(S, 1e-8)  # 防止除零
 
