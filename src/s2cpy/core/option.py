@@ -1,8 +1,10 @@
+import dataclasses
 from typing import List, Tuple, Optional
 
 import numpy as np
 from matplotlib import pyplot as plt
 
+from s2cpy.model.core_model import OptionType
 from s2cpy.model.option import CMOption, ExpirationDate
 
 
@@ -26,6 +28,40 @@ def sort_options_by_strike(options: List[CMOption], price: float) -> Tuple[List[
         ),
     )
     return sorted_options, closest_index
+
+
+@dataclasses.dataclass
+class OptionList:
+    put: List[CMOption]
+    call: List[CMOption]
+
+
+def group_options_by_expiration_date(
+        options: List[CMOption],
+) -> dict[Optional[ExpirationDate], OptionList]:
+    """
+    把options根据其expiration_date进行分组。
+    然后根据put和call进行分组。
+
+    :param options:
+    :return:
+    """
+    grouped: dict[Optional[ExpirationDate], OptionList] = {}
+    for option in options:
+        expiration_date = option.expiration_date
+        if expiration_date not in grouped:
+            grouped[expiration_date] = OptionList(put=[], call=[])
+
+        option_list = grouped[expiration_date]
+        if option.option_type is OptionType.Put:
+            option_list.put.append(option)
+        elif option.option_type is OptionType.Call:
+            option_list.call.append(option)
+        else:
+            raise ValueError(f"Unsupported option type: {option.option_type!r}")
+
+    return grouped
+    pass
 
 
 # ==================== 策略类 ====================
