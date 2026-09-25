@@ -35,11 +35,26 @@ def test_group_options_by_expiration_date_groups_puts_and_calls():
     put = make_option("put-0925", OptionType.Put, "20260925")
     other_call = make_option("call-0926", OptionType.Call, "20260926")
 
-    grouped = group_options_by_expiration_date([call, put, other_call])
+    grouped = group_options_by_expiration_date(
+        [call, put, other_call],
+        underlying_price=101.0,
+    )
 
     assert grouped == {
-        ExpirationDate("20260925"): OptionList(put=[put], call=[call]),
-        ExpirationDate("20260926"): OptionList(put=[], call=[other_call]),
+        ExpirationDate("20260925"): OptionList(
+            put=[put],
+            call=[call],
+            underlying_price=101.0,
+            call_least_otm_index=-1,
+            put_least_itm_index=-1,
+        ),
+        ExpirationDate("20260926"): OptionList(
+            put=[],
+            call=[other_call],
+            underlying_price=101.0,
+            call_least_otm_index=-1,
+            put_least_itm_index=-1,
+        ),
     }
 
 
@@ -49,18 +64,46 @@ def test_group_options_by_expiration_date_preserves_order():
         make_option("call-2", OptionType.Call, "20260925"),
     ]
 
-    grouped = group_options_by_expiration_date(calls)
+    grouped = group_options_by_expiration_date(calls, underlying_price=101.0)
 
     assert grouped[ExpirationDate("20260925")].call == calls
+
+
+def test_group_options_by_expiration_date_sorts_options_and_initializes_least_indexes():
+    call_far = make_option("call-110", OptionType.Call, "20260925")
+    call_near = make_option("call-100", OptionType.Call, "20260925")
+    put_far = make_option("put-90", OptionType.Put, "20260925")
+    put_near = make_option("put-105", OptionType.Put, "20260925")
+    call_far.strike = 110.0
+    call_near.strike = 100.0
+    put_far.strike = 90.0
+    put_near.strike = 105.0
+
+    grouped = group_options_by_expiration_date(
+        [call_far, call_near, put_far, put_near],
+        underlying_price=103.0,
+    )
+    result = grouped[ExpirationDate("20260925")]
+
+    assert result.call == [call_near, call_far]
+    assert result.put == [put_far, put_near]
+    assert result.call_least_otm_index == -1
+    assert result.put_least_itm_index == -1
 
 
 def test_group_options_by_expiration_date_groups_permanent_options_under_none():
     option = make_option("permanent", OptionType.Put, None)
 
-    grouped = group_options_by_expiration_date([option])
+    grouped = group_options_by_expiration_date([option], underlying_price=100.0)
 
-    assert grouped[None] == OptionList(put=[option], call=[])
+    assert grouped[None] == OptionList(
+        put=[option],
+        call=[],
+        underlying_price=100.0,
+        call_least_otm_index=-1,
+        put_least_itm_index=-1,
+    )
 
 
 def test_group_options_by_expiration_date_returns_empty_dict_for_empty_input():
-    assert group_options_by_expiration_date([]) == {}
+    assert group_options_by_expiration_date([], underlying_price=100.0) == {}

@@ -30,19 +30,38 @@ def sort_options_by_strike(options: List[CMOption], price: float) -> Tuple[List[
     return sorted_options, closest_index
 
 
+NOT_FOUND_OPTION_INDEX = -1
+
+
+def _find_high_underlying_price(options: List[CMOption], underlying_price: float) -> int:
+    for index, option in enumerate(options):
+        if option.strike > underlying_price:
+            return index
+    return NOT_FOUND_OPTION_INDEX
+
+
 @dataclasses.dataclass
 class OptionList:
     put: List[CMOption]
     call: List[CMOption]
+    underlying_price: float
+    call_least_otm_index: int  # call里面最小的虚值期权的index
+    put_least_itm_index: int  # put里面，最小的实值期权
 
 
 def group_options_by_expiration_date(
         options: List[CMOption],
+        underlying_price: float
 ) -> dict[Optional[ExpirationDate], OptionList]:
     """
     把options根据其expiration_date进行分组。
     然后根据put和call进行分组。
 
+    关于underlying_price:
+    每一个OptionList统一取underlying_price.
+    call_anchor_index:为call里面，以期权里最价格最低的虚值期权，即strike大于underlying_price里面，strike最小的
+    put_anchor_index:为put里面，以期权里最价格最低的实质期权，即strike大于underlying_price里面，strike最小的
+    :param underlying_price:
     :param options:
     :return:
     """
@@ -50,7 +69,13 @@ def group_options_by_expiration_date(
     for option in options:
         expiration_date = option.expiration_date
         if expiration_date not in grouped:
-            grouped[expiration_date] = OptionList(put=[], call=[])
+            grouped[expiration_date] = OptionList(
+                put=[],
+                call=[],
+                underlying_price=underlying_price,
+                call_least_otm_index=NOT_FOUND_OPTION_INDEX,
+                put_least_itm_index=NOT_FOUND_OPTION_INDEX,
+            )
 
         option_list = grouped[expiration_date]
         if option.option_type is OptionType.Put:
@@ -60,8 +85,17 @@ def group_options_by_expiration_date(
         else:
             raise ValueError(f"Unsupported option type: {option.option_type!r}")
 
+    for option_list in grouped.values():
+        option_list.call = sorted(option_list.call, key=lambda option: option.strike)
+        option_list.put = sorted(option_list.put, key=lambda option: option.strike)
+        option_list.call_anchor_index = _find_high_underlying_price(
+            option_list.call, underlying_price
+        )
+        option_list.put_anchor_index = _find_high_underlying_price(
+            option_list.put, underlying_price
+        )
+
     return grouped
-    pass
 
 
 # ==================== 策略类 ====================
