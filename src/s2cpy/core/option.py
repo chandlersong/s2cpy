@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from s2cpy.model.core_model import OptionType
-from s2cpy.model.option import CMOption, ExpirationDate
+from s2cpy.model.option import CMOption, ExpirationDate, Leg, OptionList
 
 
 def sort_options_by_strike(options: List[CMOption], price: float) -> Tuple[List[CMOption], int]:
@@ -40,19 +40,12 @@ def _find_high_underlying_price(options: List[CMOption], underlying_price: float
     return NOT_FOUND_OPTION_INDEX
 
 
-@dataclasses.dataclass
-class OptionList:
-    put: List[CMOption]
-    call: List[CMOption]
-    underlying_price: float
-    call_least_otm_index: int  # call里面最小的虚值期权的index
-    put_least_itm_index: int  # put里面，最小的实值期权
 
 
 def group_options_by_expiration_date(
         options: List[CMOption],
         underlying_price: float
-) -> dict[Optional[ExpirationDate], OptionList]:
+) -> dict[ExpirationDate, OptionList]:
     """
     把options根据其expiration_date进行分组。
     然后根据put和call进行分组。
@@ -86,42 +79,53 @@ def group_options_by_expiration_date(
             raise ValueError(f"Unsupported option type: {option.option_type!r}")
 
     for option_list in grouped.values():
-        option_list.call = sorted(option_list.call, key=lambda option: option.strike)
-        option_list.put = sorted(option_list.put, key=lambda option: option.strike)
-        option_list.call_anchor_index = _find_high_underlying_price(
+        option_list.call = sorted(option_list.call, key=lambda o: o.strike)
+        option_list.put = sorted(option_list.put, key=lambda o: o.strike)
+        option_list.call_least_otm_index = _find_high_underlying_price(
             option_list.call, underlying_price
         )
-        option_list.put_anchor_index = _find_high_underlying_price(
+        option_list.put_least_itm_index = _find_high_underlying_price(
             option_list.put, underlying_price
         )
 
     return grouped
 
 
-# ==================== 策略类 ====================
-class OptionStrategy:
+"""
+这个类的定位还是很模糊。我也不太清楚这个具体的类到底是干什么。
+其实我想要的就是，给一组期权。然后计算出资金曲线。
+"""
+
+
+class OptionPositon:
     def __init__(
             self,
-            options: List[CMOption],
+            legs: List[Leg],
             fee_per_contract: float = 0.0,
             fee_rate: float = 0.0,
             include_close_fee: bool = True,
-            name: str = "OKX 币本位策略"
+            name: str = "OKX 币本位策略",
+
     ):
-        self.options = options
+        self.legs = legs
         self.fee_per_contract = fee_per_contract
         self.fee_rate = fee_rate
         self.include_close_fee = include_close_fee
         self.name = name
 
     def calculate_fees(self) -> float:
+        """
+        希望每个交易锁不同的交易手续费。
+        所以由各个交易所单独处理和计算，这里只是计算。
+        :return:
+        """
         return 0
 
     def calculate_payoff(self, S: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
         """返回单位：币"""
         gross = np.zeros_like(S, dtype=float)
-        for opt in self.options:
-            gross += opt.payoff(S)
+        for leg in self.legs:
+            gross += leg.payoff(S)
 
         total_fee = self.calculate_fees()
         net = gross - total_fee
@@ -129,7 +133,7 @@ class OptionStrategy:
 
     def plot_payoff(self, S: Optional[np.ndarray] = None, figsize=(13, 7)):
         if S is None:
-            strikes = [opt.strike for opt in self.options]
+            strikes = [leg.option.strike for leg in self.legs]
             S = np.linspace(min(strikes) * 0.6, max(strikes) * 1.5, 600)
 
         S = np.maximum(S, 1e-8)  # 防止除零
@@ -156,8 +160,8 @@ class OptionStrategy:
         ax2.tick_params(axis='y', labelcolor='darkorange')
 
         # 行权价参考线
-        for opt in self.options:
-            ax1.axvline(opt.strike, color='gray', linestyle=':', alpha=0.6)
+        for leg in self.legs:
+            ax1.axvline(leg.option.strike, color='gray', linestyle=':', alpha=0.6)
 
         # 图例合并
         lines1, labels1 = ax1.get_legend_handles_labels()

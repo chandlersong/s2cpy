@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from s2cpy.core.option import sort_options_by_strike
 from s2cpy.model.core_model import OptionType
 from s2cpy.model.option import CMOption
@@ -10,6 +12,8 @@ def make_option(strike: float, identify: str) -> CMOption:
         multiplier=1.0,
         base_ccy="BTC",
         option_type=OptionType.Call,
+        premium=100,
+        premium_ts=datetime.now(timezone.utc),
     )
 
 

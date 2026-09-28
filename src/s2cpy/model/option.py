@@ -1,16 +1,17 @@
+"""
+# Leg和Option的一些思考。
+本质是标的和仓位区别的思考。其实期权还是一个挺复杂的东西。
+因为我想的是leg表示的是仓位。而Option表示的是具体东西。
+
+
+"""
 import dataclasses
-from datetime import date as Date, datetime, timezone, date
+from datetime import date as Date, datetime, timedelta, timezone, date
 from functools import total_ordering
-from typing import Optional
+from typing import Optional, List
 import numpy as np
 
 from s2cpy.model.core_model import Instrument, OptionType
-
-"""
-因为OKX有着两种期权。币本位所以分开来说
-"""
-
-
 
 """
 代表行权日，需求为。
@@ -18,6 +19,8 @@ from s2cpy.model.core_model import Instrument, OptionType
 2. 输出的字符串格式为YYYYMMDD
 3. 能够作为dict里面的key。
 """
+
+
 @total_ordering
 class ExpirationDate:
     """Immutable value object for an option expiration date."""
@@ -125,7 +128,8 @@ class CMOption(Instrument):
             return None
 
         return ExpirationDate(
-            datetime.fromtimestamp(self.validate_before, tz=timezone.utc)
+            datetime(1970, 1, 1, tzinfo=timezone.utc)
+            + timedelta(milliseconds=self.validate_before)
         )
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
@@ -138,4 +142,26 @@ class CMOption(Instrument):
 
     def payoff(self, S: np.ndarray) -> np.ndarray:
         """单腿收益（单位：币）"""
-        return 1 * (self.intrinsic_value(S) - self.premium) * self.multiplier
+        return (self.intrinsic_value(S) - self.premium) * self.multiplier
+
+
+@dataclasses.dataclass
+class Leg:
+    option: CMOption
+    quantity: float = 1
+
+    def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
+        return self.option.intrinsic_value(s) * self.quantity
+
+    def payoff(self, S: np.ndarray) -> np.ndarray:
+        """单腿收益（单位：币）"""
+        return self.option.payoff(S) * self.quantity
+
+
+@dataclasses.dataclass
+class OptionList:
+    put: List[CMOption]
+    call: List[CMOption]
+    underlying_price: float
+    call_least_otm_index: int  # call里面最小的虚值期权的index
+    put_least_itm_index: int  # put里面，最小的实值期权

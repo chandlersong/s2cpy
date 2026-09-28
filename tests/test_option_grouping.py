@@ -16,6 +16,7 @@ def make_option(
             datetime.strptime(expiration, "%Y%m%d")
             .replace(tzinfo=timezone.utc)
             .timestamp()
+            * 1000
         )
 
     return CMOption(
