@@ -3,7 +3,7 @@
 """
 import abc
 import dataclasses
-from typing import Protocol, Optional, Callable, Any, List
+from typing import Protocol, Optional, Callable, Any, List, runtime_checkable
 from enum import Enum
 
 """
@@ -35,9 +35,9 @@ class Position:
     avg_price: Optional[float] = None
     extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
 
-
+@runtime_checkable
 @dataclasses.dataclass(eq=False)
-class Instrument:
+class Instrument(Protocol):
     """
     identify: 应该是有意义的。方便用户去处理一些特殊逻辑。比如说多资产的时候，通过字段去区分。
     external_id：看情况，有些有，有些没有，最好是在交易所的标识。

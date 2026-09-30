@@ -3,12 +3,17 @@
 本质是标的和仓位区别的思考。其实期权还是一个挺复杂的东西。
 因为我想的是leg表示的是仓位。而Option表示的是具体东西。
 
+# option的抽象过程。
+发觉自己给自己上难度。要把这个抽象出来。但是实际上，不得不做。主要是Option的种类实在太多。
+1. Polymarket的各种类型，比如时候达到过，最后落点。
+2. Okx的期权有币本位喝U本位，计算实在太多。
 
 """
 import dataclasses
+from abc import ABC
 from datetime import date as Date, datetime, timedelta, timezone, date
 from functools import total_ordering
-from typing import Optional, List
+from typing import Optional, List, Protocol
 import numpy as np
 
 from s2cpy.model.core_model import Instrument, OptionType
@@ -112,14 +117,17 @@ class ExpirationDate:
         return NotImplemented
 
 
-@dataclasses.dataclass(eq=False, kw_only=True)
-class CMOption(Instrument):
+"""
+"""
+
+
+@dataclasses.dataclass(kw_only=True)
+class Option(Instrument, Protocol):
     strike: float  # 行权价
     multiplier: float
     base_ccy: str
     option_type: OptionType
-    premium: float
-    premium_ts: datetime
+    trade_type: str = "NONE"
 
     @property
     def expiration_date(self) -> Optional[ExpirationDate]:
@@ -131,6 +139,18 @@ class CMOption(Instrument):
             datetime(1970, 1, 1, tzinfo=timezone.utc)
             + timedelta(milliseconds=self.validate_before)
         )
+
+    def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
+        pass
+
+    def payoff(self, S: np.ndarray) -> np.ndarray:
+        pass
+
+
+@dataclasses.dataclass(eq=False, kw_only=True)
+class CMOption(Option):
+    premium: float
+    premium_ts: datetime
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
         if self.option_type == OptionType.Call:
@@ -147,7 +167,7 @@ class CMOption(Instrument):
 
 @dataclasses.dataclass
 class Leg:
-    option: CMOption
+    option: Option
     quantity: float = 1
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
@@ -160,8 +180,8 @@ class Leg:
 
 @dataclasses.dataclass
 class OptionList:
-    put: List[CMOption]
-    call: List[CMOption]
+    put: List[Option]
+    call: List[Option]
     underlying_price: float
     call_least_otm_index: int  # call里面最小的虚值期权的index
     put_least_itm_index: int  # put里面，最小的实值期权
