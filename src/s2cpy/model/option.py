@@ -12,10 +12,12 @@
 import dataclasses
 from datetime import date as Date, datetime, timedelta, timezone, date
 from functools import total_ordering
-from typing import Optional, List, Protocol
+from typing import Optional, List, Protocol, Final
 import numpy as np
 
 from s2cpy.model.core_model import Instrument, OptionType
+
+
 
 """
 代表行权日，需求为。
@@ -175,7 +177,6 @@ class Leg:
         if quantity is None:
             quantity = 1
         self.quantity = quantity
-
 
     @property
     def base_ccy(self) -> str:

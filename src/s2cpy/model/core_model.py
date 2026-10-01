@@ -3,12 +3,19 @@
 """
 import abc
 import dataclasses
-from typing import Protocol, Optional, Callable, Any, List, runtime_checkable
+from typing import Protocol, Optional, Callable, Any, List, runtime_checkable, Final
 from enum import Enum
 
 """
 用户发出一些
 """
+
+"""
+主要还是用于一些特殊的标志位，比如在计算收益的。是否需要做转换。
+以后，所有的收益计算B圈的收益计算，都是以USDT为基准的。其他都是币本位。
+这里主要是定义稳定币。其他的稳定币，比如USDC，BUSD等，默认用这个。
+"""
+BASE_CRYPTO_STABLE_COIN: Final = "USDT"
 
 
 class OptionType(Enum):
@@ -34,6 +41,7 @@ class Position:
     quantity: float
     avg_price: Optional[float] = None
     extra_info: Optional[dict] = None  # 主要存放一些交易所的特有数据，因为每个交易所有其独特额数据。
+
 
 @runtime_checkable
 @dataclasses.dataclass(eq=False)

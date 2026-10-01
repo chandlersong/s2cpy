@@ -20,7 +20,7 @@ class PolyMarketHistoryDataFeed:
         self.db_info = db_info
 
     def _query(
-        self, query: str, ts: str
+            self, query: str, ts: str
     ) -> tuple[list[str], list[tuple[object, ...]]]:
         connection_kwargs = {
             "host": self.db_info.host,
@@ -40,10 +40,16 @@ class PolyMarketHistoryDataFeed:
 
     def query_pm_price(self, ts: Union[datetime.datetime, str]) -> pd.DataFrame:
         query = """
-                SELECT i.assert_id, i.assert_slug, i.series_id, i.series_slug,
-                       i.market_slug, i.start_ms, i.end_ms, h.price
+                SELECT i.assert_id,
+                       i.assert_slug,
+                       i.series_id,
+                       i.series_slug,
+                       i.market_slug,
+                       i.start_ms,
+                       i.end_ms,
+                       h.price
                 FROM polymarket_price_history AS h
-                JOIN polymarket_instruments AS i ON h.instrument_id = i.id
+                         JOIN polymarket_instruments AS i ON h.instrument_id = i.id
                 WHERE h.timestamp = %s
                 ORDER BY h.timestamp DESC
                 """
@@ -60,22 +66,31 @@ class PolyMarketHistoryDataFeed:
         :return:
         """
         query = """
-                SELECT i.assert_id, i.assert_slug, i.series_id, i.series_slug,
-                       i.market_slug, i.start_ms, i.end_ms, h.price
+                SELECT i.assert_id,
+                       i.assert_slug,
+                       i.series_id,
+                       i.series_slug,
+                       i.market_slug,
+                       i.start_ms,
+                       i.end_ms,
+                       h.price,
+                       h.timestamp
                 FROM polymarket_price_history AS h
-                JOIN polymarket_instruments AS i ON h.instrument_id = i.id
-                WHERE i.series_id = '10016' AND h.timestamp = %s
+                         JOIN polymarket_instruments AS i ON h.instrument_id = i.id
+                WHERE i.series_id = '10016'
+                  AND h.timestamp = %s
                 """
         ts = _ensure_ts_str(ts)
         res = []
         _, rows = self._query(query, ts)
 
         for row in rows:
-            _, asset_slug, _, _, _, _, expiration_ms, price = row
+            _, asset_slug, _, _, _, _, expiration_ms, price, timestamp = row
             option = HitPriceBinaryOption(
-                asset_slug=asset_slug,
+                asset_slug=str(asset_slug),
                 expiration_ms=expiration_ms,
-                latest_price=float(price) if price is not None else None,
+                premium=float(price) if price is not None else None,
+                premium_ts=timestamp,
             )
             res.append(option)
 

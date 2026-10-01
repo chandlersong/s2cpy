@@ -7,7 +7,7 @@ def test_reach_yes_parsing():
     slug = "will-bitcoin-reach-80k-august-31-september-6-2026_Yes"
     ms = 1690000000000
     o = HitPriceBinaryOption(slug, ms)
-    assert o.strike_price == 80000.0
+    assert o.strike == 80000.0
     assert o.direction == TOKEN_YES
     assert o.is_above is True
     assert o.expiration == datetime.datetime.fromtimestamp(ms / 1000.0, tz=datetime.timezone.utc)
@@ -17,7 +17,7 @@ def test_reach_no_parsing():
     slug = "will-bitcoin-reach-80k-august-31-september-6-2026_No"
     ms = 1690000000000
     o = HitPriceBinaryOption(slug, ms)
-    assert o.strike_price == 80000.0
+    assert o.strike == 80000.0
     assert o.direction == TOKEN_NO
     assert o.is_above is True
 
@@ -26,7 +26,7 @@ def test_dip_yes_parsing():
     slug = "will-bitcoin-dip-to-76k-august-31-september-6-2026_Yes"
     ms = 1690000000000
     o = HitPriceBinaryOption(slug, ms)
-    assert o.strike_price == 76000.0
+    assert o.strike == 76000.0
     assert o.direction == TOKEN_YES
     assert o.is_above is False
 
@@ -35,14 +35,14 @@ def test_numeric_strike_without_k():
     slug = "will-bitcoin-reach-80000-august-31-september-6-2026_Yes"
     ms = 1690000000000
     o = HitPriceBinaryOption(slug, ms)
-    assert o.strike_price == 80000.0
+    assert o.strike == 80000.0
     assert o.is_above is True
 
 
 def test_dip_strike_with_pt_decimal_notation():
     slug = "will-bitcoin-dip-to-77pt5k-in-september-2026-from-september-11_Yes"
     o = HitPriceBinaryOption(slug, 1690000000000)
-    assert o.strike_price == 77500.0
+    assert o.strike == 77500.0
     assert o.direction == TOKEN_YES
     assert o.is_above is False
 
@@ -53,7 +53,7 @@ def test_dip_numeric_strike_ignores_trailing_numeric_identifiers():
         "-971-191-116-343-999-758-299-813-237_No"
     )
     o = HitPriceBinaryOption(slug, 1690000000000)
-    assert o.strike_price == 30000.0
+    assert o.strike == 30000.0
     assert o.direction == TOKEN_NO
     assert o.is_above is False
 
@@ -63,7 +63,7 @@ def test_missing_parts_defaults():
     ms = 1690000000000
     o = HitPriceBinaryOption(slug, ms)
     # fallback strike
-    assert o.strike_price == 1
+    assert o.strike == 1
     # default direction -> NO because suffix absent
     assert o.direction == TOKEN_NO
     # default is_above True

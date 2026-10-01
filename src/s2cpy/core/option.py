@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 from matplotlib import pyplot as plt
 
-from s2cpy.model.core_model import OptionType
+from s2cpy.model.core_model import OptionType, BASE_CRYPTO_STABLE_COIN
 from s2cpy.model.option import CMOption, ExpirationDate, Leg, OptionList
 
 
@@ -38,8 +38,6 @@ def _find_high_underlying_price(options: List[CMOption], underlying_price: float
         if option.strike > underlying_price:
             return index
     return NOT_FOUND_OPTION_INDEX
-
-
 
 
 def group_options_by_expiration_date(
@@ -91,6 +89,40 @@ def group_options_by_expiration_date(
     return grouped
 
 
+@dataclasses.dataclass
+class OptionPositionCurve:
+    gross: np.ndarray
+    net: np.ndarray
+    total_fee: float
+    ccy: str
+    coin_value: np.ndarray
+
+    @property
+    def is_stable_coin(self) -> bool:
+        return self.ccy == BASE_CRYPTO_STABLE_COIN
+
+    @property
+    def stable_coin_net(self) -> np.ndarray:
+        """
+        把币收益换算成大约的 USDT 价值
+        :return:
+        """
+        if self.is_stable_coin:
+            return self.net
+        return self.net * self.coin_value
+
+    @property
+    def stable_coin_gross(self) -> np.ndarray:
+        """
+        把币收益换算成大约的 USDT 价值
+        :return:
+        """
+        if self.is_stable_coin:
+            return self.gross
+        return self.gross * self.coin_value
+
+
+
 """
 这个类的定位还是很模糊。我也不太清楚这个具体的类到底是干什么。
 其实我想要的就是，给一组期权。然后计算出资金曲线。
@@ -121,15 +153,40 @@ class OptionPositon:
         """
         return 0
 
-    def calculate_payoff(self, S: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
+    """
+    计算收益曲线。返回币收益和换算成USDT的收益曲线。
+    1. gross: 单腿收益曲线的总和
+    2. net: 扣除手续费后的收益曲线
+    3. total_fee: 总手续费
+    
+    # ccy确定流程
+    1. ccy不为BASE_CRYPTO_STABLE_COIN时，做以下检测
+       - 所有leg的base_ccy必须相同，否则抛出异常
+         - 所有leg的base_ccy必须为ccy，否则抛出异常
+    2. 如果说ccy为None，则使用legs的base_ccy作为ccy。返回的为币收益曲线。
+    """
+
+    def calculate_payoff(self, coin_value: np.ndarray, ccy: Optional[str] = None) -> OptionPositionCurve:
         """返回单位：币"""
-        gross = np.zeros_like(S, dtype=float)
+        if ccy is None:
+            if not self.legs:
+                raise ValueError("Cannot infer ccy from an option position with no legs")
+            ccy = self.legs[0].base_ccy
+
+        if ccy != BASE_CRYPTO_STABLE_COIN:
+            leg_ccys = {leg.base_ccy for leg in self.legs}
+            if len(leg_ccys) > 1:
+                raise ValueError("All option legs must have the same base_ccy")
+            if leg_ccys != {ccy}:
+                raise ValueError(f"All option legs must have base_ccy {ccy!r}")
+
+        gross = np.zeros_like(coin_value, dtype=float)
         for leg in self.legs:
-            gross += leg.payoff(S)
+            gross += leg.payoff(coin_value)
 
         total_fee = self.calculate_fees()
         net = gross - total_fee
-        return gross, net, total_fee
+        return OptionPositionCurve(gross=gross, net=net, total_fee=total_fee, ccy=ccy, coin_value=coin_value)
 
     def plot_payoff(self, S: Optional[np.ndarray] = None, figsize=(13, 7)):
         if S is None:
@@ -138,10 +195,13 @@ class OptionPositon:
 
         S = np.maximum(S, 1e-8)  # 防止除零
 
-        gross_coin, net_coin, total_fee = self.calculate_payoff(S)
-
+        payoff_curve = self.calculate_payoff(S)
+        net_coin = payoff_curve.net
         # 把币收益换算成大约的 USDT 价值
-        net_usdt = net_coin * S
+        if not payoff_curve.is_stable_coin:
+            net_usdt = payoff_curve.stable_coin_net
+        else:
+            net_usdt = payoff_curve.net
 
         # ---------- 开始画图 ----------
         fig, ax1 = plt.subplots(figsize=figsize)
@@ -176,7 +236,7 @@ class OptionPositon:
         # 打印关键数据
         print("=" * 65)
         print(f"策略名称       : {self.name}")
-        print(f"总手续费       : {total_fee:.6f} BTC")
+        print(f"总手续费       : {payoff_curve.total_fee:.6f} BTC")
         print(f"最大净收益(BTC): {np.max(net_coin):.6f} BTC")
         print(f"最大净亏损(BTC): {np.min(net_coin):.6f} BTC")
         print("=" * 65)

@@ -1,7 +1,9 @@
 import datetime
+from typing import Union
 
 import numpy as np
 
+from s2cpy.model.core_model import BASE_CRYPTO_STABLE_COIN
 from s2cpy.model.option import Option
 
 TOKEN_YES = 1
@@ -36,7 +38,7 @@ class HitPriceBinaryOption(Option):
         - 对于 TOKEN_NO（direction == TOKEN_NO），事件成立时返回 0.0，否则 1.0。
         """
         try:
-            strike = float(self.strike_price)
+            strike = float(self.strike)
         except Exception:
             return 0.0
 
@@ -51,7 +53,8 @@ class HitPriceBinaryOption(Option):
         else:
             return 0.0 if event_happened else 1.0
 
-    def __init__(self, asset_slug: str, expiration_ms: int, premium: float = None, premium_ts: datetime.datetime = None):
+    def __init__(self, asset_slug: str, expiration_ms: int, premium: float = None,
+                 premium_ts: Union[str, datetime.datetime] = None):
         """
 
         可能的slug样式：
@@ -93,7 +96,7 @@ class HitPriceBinaryOption(Option):
 
         FUTURE:
         1. 支持BTC之外的标的。
-        :param slug:
+        :param asset_slug:
         :param expiration_ms:
         """
         import re
@@ -101,6 +104,7 @@ class HitPriceBinaryOption(Option):
         self.asset_slug = asset_slug
         self.identify = asset_slug
         self.premium_ts = premium_ts
+        self.multiplier = 1
 
         # token 后缀 Yes/No
         if "_" in asset_slug:
@@ -153,15 +157,12 @@ class HitPriceBinaryOption(Option):
         if strike_candidate:
             s = strike_candidate.lower().replace("pt", ".")
             if s.endswith('k'):
-                self.strike_price = float(s[:-1]) * 1000.0
+                self.strike = float(s[:-1]) * 1000.0
             else:
-                self.strike_price = float(s)
+                self.strike = float(s)
         else:
-            self.strike_price = 1
+            self.strike = 1
 
         # expiration_ms 为 UTC unix 毫秒
-        try:
-            # use timezone-aware UTC datetime
-            self.expiration = datetime.datetime.fromtimestamp(expiration_ms / 1000.0, tz=datetime.timezone.utc)
-        except Exception:
-            self.expiration = None
+        self.validate_before = expiration_ms
+        self.base_ccy = BASE_CRYPTO_STABLE_COIN
