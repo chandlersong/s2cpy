@@ -10,7 +10,6 @@
 
 """
 import dataclasses
-from abc import ABC
 from datetime import date as Date, datetime, timedelta, timezone, date
 from functools import total_ordering
 from typing import Optional, List, Protocol
@@ -128,6 +127,8 @@ class Option(Instrument, Protocol):
     base_ccy: str
     option_type: OptionType
     trade_type: str = "NONE"
+    premium: float  # 权利金
+    premium_ts: datetime  # 权利金时间戳
 
     @property
     def expiration_date(self) -> Optional[ExpirationDate]:
@@ -143,14 +144,9 @@ class Option(Instrument, Protocol):
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
         pass
 
-    def payoff(self, S: np.ndarray) -> np.ndarray:
-        pass
-
 
 @dataclasses.dataclass(eq=False, kw_only=True)
 class CMOption(Option):
-    premium: float
-    premium_ts: datetime
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
         if self.option_type == OptionType.Call:
@@ -168,14 +164,29 @@ class CMOption(Option):
 @dataclasses.dataclass
 class Leg:
     option: Option
+    premium: float
     quantity: float = 1
+
+    def __init__(self, option: Option, quantity: Optional[float] = None, premium: Optional[float] = None):
+        self.option = option
+        if premium is None:
+            premium = option.premium
+        self.premium = premium
+        if quantity is None:
+            quantity = 1
+        self.quantity = quantity
+
+
+    @property
+    def base_ccy(self) -> str:
+        return self.option.base_ccy
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
         return self.option.intrinsic_value(s) * self.quantity
 
     def payoff(self, S: np.ndarray) -> np.ndarray:
         """单腿收益（单位：币）"""
-        return self.option.payoff(S) * self.quantity
+        return (self.option.intrinsic_value(S) - self.premium) * self.option.multiplier * self.quantity
 
 
 @dataclasses.dataclass

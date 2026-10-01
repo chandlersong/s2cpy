@@ -11,10 +11,8 @@ TOKEN_NO = 0
 class HitPriceBinaryOption(Option):
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
-        pass
-
-    def payoff(self, S: np.ndarray) -> np.ndarray:
-        pass
+        res = [self.get_intrinsic_value(v) for v in s]
+        return np.array(res)
 
     """
     对应的是btc-multi-strikes-weekly这类
@@ -53,7 +51,7 @@ class HitPriceBinaryOption(Option):
         else:
             return 0.0 if event_happened else 1.0
 
-    def __init__(self, asset_slug: str, expiration_ms: int, latest_price: float = None):
+    def __init__(self, asset_slug: str, expiration_ms: int, premium: float = None, premium_ts: datetime.datetime = None):
         """
 
         可能的slug样式：
@@ -99,9 +97,10 @@ class HitPriceBinaryOption(Option):
         :param expiration_ms:
         """
         import re
-        self.latest_price = latest_price
+        self.premium = premium
         self.asset_slug = asset_slug
         self.identify = asset_slug
+        self.premium_ts = premium_ts
 
         # token 后缀 Yes/No
         if "_" in asset_slug:
