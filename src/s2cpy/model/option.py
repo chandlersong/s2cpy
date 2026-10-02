@@ -220,6 +220,11 @@ class Leg:
         """单腿收益（单位：币）"""
         return (self.option.intrinsic_value(S) - self.premium) * self.option.multiplier * self.quantity
 
+    def trading_fee(self, premium: float = None) -> float:
+        if premium is None:
+            premium = self.premium
+        return self.option.calculate_trading_fee(quantity=self.quantity, premium=premium)
+
 
 @dataclasses.dataclass
 class OptionList:

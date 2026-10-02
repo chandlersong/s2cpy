@@ -23,7 +23,7 @@ class OkxOptionTradingFeeCalculator(TradingFeeCalculator):
             fee_rate = self.taker_fee_rate
         else:
             fee_rate = self.maker_fee_rate
-
+        quantity = abs(quantity)
         notional_factor = self.multiplier * self.contract_size * quantity
         rate_fee = fee_rate * notional_factor
         cap_fee = 0.07 * premium * notional_factor

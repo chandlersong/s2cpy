@@ -122,7 +122,6 @@ class OptionPositionCurve:
         return self.gross * self.coin_value
 
 
-
 """
 这个类的定位还是很模糊。我也不太清楚这个具体的类到底是干什么。
 其实我想要的就是，给一组期权。然后计算出资金曲线。
@@ -151,7 +150,11 @@ class OptionPositon:
         所以由各个交易所单独处理和计算，这里只是计算。
         :return:
         """
-        return 0
+        leg_ccys = {leg.base_ccy for leg in self.legs}
+        if len(leg_ccys) > 1:
+            raise ValueError("All option legs must have the same base_ccy")
+        total_fee = sum([leg.trading_fee() for leg in self.legs])
+        return total_fee
 
     """
     计算收益曲线。返回币收益和换算成USDT的收益曲线。
