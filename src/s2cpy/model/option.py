@@ -17,8 +17,6 @@ import numpy as np
 
 from s2cpy.model.core_model import Instrument, OptionType
 
-
-
 """
 代表行权日，需求为。
 1. 能够比较大小。
@@ -122,6 +120,24 @@ class ExpirationDate:
 """
 
 
+class TradingFeeCalculator(Protocol):
+    """
+    交易手续费计算器
+    """
+
+    def calculate_trading_fee(self, quantity: float, premium: float,
+                              is_taker: bool = True, **kwargs) -> float:
+        """
+        计算交易手续费。因为不同交易所的手续费计算方式不同，所以需要在子类中实现。
+        因为有些信息，比如是卖盒卖。所以多了一个kwargs。
+        :param is_taker: 是否吃单
+        :param quantity: 成交数量
+        :param premium: 成交价格
+        :return:
+        """
+        pass
+
+
 @dataclasses.dataclass(kw_only=True)
 class Option(Instrument, Protocol):
     strike: float  # 行权价
@@ -131,6 +147,7 @@ class Option(Instrument, Protocol):
     trade_type: str = "NONE"
     premium: float  # 权利金
     premium_ts: datetime  # 权利金时间戳
+    trading_fee_calculator: TradingFeeCalculator
 
     @property
     def expiration_date(self) -> Optional[ExpirationDate]:
@@ -145,6 +162,19 @@ class Option(Instrument, Protocol):
 
     def intrinsic_value(self, s: np.ndarray) -> np.ndarray:
         pass
+
+    def calculate_trading_fee(self, quantity: float, premium: Optional[float] = None,
+                              is_taker: bool = True) -> float:
+        """
+        计算交易手续费。因为不同交易所的手续费计算方式不同，所以需要在子类中实现。
+        :param is_taker: 是否吃单
+        :param quantity: 成交数量
+        :param premium: 成交价格
+        :return:
+        """
+        if premium is None:
+            premium = self.premium
+        return self.trading_fee_calculator.calculate_trading_fee(quantity, premium, is_taker)
 
 
 @dataclasses.dataclass(eq=False, kw_only=True)

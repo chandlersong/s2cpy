@@ -4,6 +4,7 @@ from typing import Union, List
 import psycopg
 
 from s2cpy.core.postgresql_tools import PostgresqlInfo
+from s2cpy.exchange.okx import OkxOptionTradingFeeCalculator
 from s2cpy.model.core_model import OptionType
 from s2cpy.model.option import CMOption
 
@@ -100,7 +101,7 @@ class OkxOptionRepository:
                 multiplier = multiplier_by_underlying[underlying.upper()]
             except KeyError as exc:
                 raise ValueError(f"Unexpected OKX option identifier: {identify!r}") from exc
-
+            fee_calculator = OkxOptionTradingFeeCalculator(multiplier=multiplier)
             options.append(
                 CMOption(
                     identify=identify,
@@ -112,6 +113,7 @@ class OkxOptionRepository:
                     option_type=option_type,
                     premium=close,
                     premium_ts=candle_begin_time,
+                    trading_fee_calculator=fee_calculator,
                 )
             )
 
