@@ -4,7 +4,7 @@ from typing import Union
 import numpy as np
 
 from s2cpy.model.core_model import BASE_CRYPTO_STABLE_COIN
-from s2cpy.model.option import Option
+from s2cpy.model.option import Option, TradingFeeCalculator
 
 TOKEN_YES = 1
 TOKEN_NO = 0
@@ -53,7 +53,8 @@ class HitPriceBinaryOption(Option):
         else:
             return 0.0 if event_happened else 1.0
 
-    def __init__(self, asset_slug: str, expiration_ms: int, premium: float = None,
+    def __init__(self, asset_slug: str, expiration_ms: int, trading_fee_calculator: TradingFeeCalculator,
+                 premium: float = None,
                  premium_ts: Union[str, datetime.datetime] = None):
         """
 
@@ -166,3 +167,4 @@ class HitPriceBinaryOption(Option):
         # expiration_ms 为 UTC unix 毫秒
         self.validate_before = expiration_ms
         self.base_ccy = BASE_CRYPTO_STABLE_COIN
+        self.trading_fee_calculator = trading_fee_calculator

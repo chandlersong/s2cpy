@@ -5,6 +5,7 @@ import pandas as pd
 import psycopg
 
 from s2cpy.core.postgresql_tools import PostgresqlInfo
+from s2cpy.exchange.polymarket_tools import PolymarketTradingFeeCalculator
 from s2cpy.model.polymarket_option import HitPriceBinaryOption
 
 
@@ -91,6 +92,7 @@ class PolyMarketHistoryDataFeed:
                 expiration_ms=expiration_ms,
                 premium=float(price) if price is not None else None,
                 premium_ts=timestamp,
+                trading_fee_calculator = PolymarketTradingFeeCalculator()
             )
             res.append(option)
 

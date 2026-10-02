@@ -6,7 +6,8 @@ import datetime
 import os
 
 import time
-from typing import Dict, get_args, Any, List
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Dict, get_args, Any, List, Final
 
 from eth_abi import encode
 from eth_utils import keccak, to_checksum_address
@@ -18,6 +19,7 @@ from py_clob_client_v2 import TickSize
 from s2cpy.exchange.polymarket_api import RestfulAPI, PolymarketNotFoundError
 from s2cpy.infrastructure.time import str_iso_datetime_to_unix_seconds
 from s2cpy.model.core_model import Instrument
+from s2cpy.model.option import TradingFeeCalculator
 from s2cpy.model.polymarket_io import Market, MarketGetByIdRequest, EventGetByIdRequest, SeriesGetRequest
 from loguru import logger
 
@@ -332,3 +334,35 @@ async def split_series_markets(series_id: str) -> tuple[List[MarketWithAddition]
                 ))
 
     return open_markets, close_markets
+
+
+# 各市场类别的 Taker feeRate
+POLYMARKET_FEE_RATES: Final[Dict[str, float]] = {
+    "crypto": 0.07,
+    "sports": 0.05,
+    "economics": 0.05,
+    "culture": 0.05,
+    "weather": 0.05,
+    "other": 0.05,
+    "general": 0.05,
+    "finance": 0.04,
+    "politics":0.04,
+    "tech": 0.04,
+    "mentions":0.04,
+    "geopolitics": 0,
+}
+
+
+class PolymarketTradingFeeCalculator(TradingFeeCalculator):
+
+    def __init__(self, market_type="crypto"):
+        self.market_type = market_type
+        self.market_fee = POLYMARKET_FEE_RATES.get(market_type, 0.05)
+
+    def calculate_trading_fee(self, quantity: float, premium: float, is_taker: bool = True, addition: Dict[str, Any] = None) -> float:
+        if not is_taker:
+            return 0
+        fee = quantity * self.market_fee * premium * (1 - premium)
+        fee = float(Decimal(str(fee)).quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP))
+        # 小于最小精度的手续费按 0 处理
+        return 0 if fee < 0.00001 else fee

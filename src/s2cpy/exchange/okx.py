@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 from s2cpy.model.option import TradingFeeCalculator
 
 
@@ -16,8 +18,7 @@ class OkxOptionTradingFeeCalculator(TradingFeeCalculator):
     [计算okx的交易手续费](https://www.okx.com/zh-hans/help/trading-fee-rules-faq#10-%E4%BA%A4%E6%98%93%E6%89%8B%E7%BB%AD%E8%B4%B9%E5%A6%82%E4%BD%95%E8%AE%A1%E7%AE%97)
     主要依据这里
     """
-
-    def calculate_trading_fee(self, quantity: float, premium: float, is_taker: bool = True) -> float:
+    def calculate_trading_fee(self, quantity: float, premium: float, is_taker: bool = True, addition: Dict[str, Any] = None) -> float:
         if is_taker:
             fee_rate = self.taker_fee_rate
         else:

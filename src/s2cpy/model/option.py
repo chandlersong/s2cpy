@@ -12,7 +12,7 @@
 import dataclasses
 from datetime import date as Date, datetime, timedelta, timezone, date
 from functools import total_ordering
-from typing import Optional, List, Protocol, Final
+from typing import Optional, List, Protocol, Final, Any, Dict
 import numpy as np
 
 from s2cpy.model.core_model import Instrument, OptionType
@@ -126,10 +126,11 @@ class TradingFeeCalculator(Protocol):
     """
 
     def calculate_trading_fee(self, quantity: float, premium: float,
-                              is_taker: bool = True, **kwargs) -> float:
+                              is_taker: bool = True, addition: Dict[str, Any] = None) -> float:
         """
         计算交易手续费。因为不同交易所的手续费计算方式不同，所以需要在子类中实现。
-        因为有些信息，比如是卖盒卖。所以多了一个kwargs。
+        因为有些信息，比如是卖盒卖。所以多了一个addition。
+        :param addition: 其余的函数
         :param is_taker: 是否吃单
         :param quantity: 成交数量
         :param premium: 成交价格
@@ -164,7 +165,7 @@ class Option(Instrument, Protocol):
         pass
 
     def calculate_trading_fee(self, quantity: float, premium: Optional[float] = None,
-                              is_taker: bool = True) -> float:
+                              is_taker: bool = True, **kwargs: Any) -> float:
         """
         计算交易手续费。因为不同交易所的手续费计算方式不同，所以需要在子类中实现。
         :param is_taker: 是否吃单
