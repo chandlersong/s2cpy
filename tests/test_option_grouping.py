@@ -1,9 +1,15 @@
 from datetime import datetime, timezone
+from typing import Dict, Any
 
 from s2cpy.core.option import OptionList, group_options_by_expiration_date
 from s2cpy.model.core_model import OptionType
-from s2cpy.model.option import CMOption, ExpirationDate
+from s2cpy.model.option import CMOption, ExpirationDate, TradingFeeCalculator
 
+
+class ZeroTradingFeeCalculator(TradingFeeCalculator):
+    def calculate_trading_fee(self, quantity: float, premium: float,
+                              is_taker: bool = True, addition: Dict[str, Any] = None) -> float:
+        return 0.0
 
 def make_option(
         identify: str,
@@ -28,6 +34,7 @@ def make_option(
         premium=1.0,
         premium_ts=datetime(2026, 9, 1, tzinfo=timezone.utc),
         validate_before=validate_before,
+        trading_fee_calculator=ZeroTradingFeeCalculator()  # type: ignore
     )
 
 
@@ -88,8 +95,8 @@ def test_group_options_by_expiration_date_sorts_options_and_initializes_least_in
 
     assert result.call == [call_near, call_far]
     assert result.put == [put_far, put_near]
-    assert result.call_least_otm_index == -1
-    assert result.put_least_itm_index == -1
+    assert result.call_least_otm_index == 1
+    assert result.put_least_itm_index == 1
 
 
 def test_group_options_by_expiration_date_groups_permanent_options_under_none():

@@ -2,9 +2,9 @@ from typing import Final, Literal
 
 from s2cpy.model.core_model import Instrument
 
-USDC: Final[Instrument] = Instrument("USDC")
+USDC: Final[str] ="USDC"
 
-USDT: Final[Instrument] = Instrument("USDT")
+USDT: Final[str] = "USDT"
 
 SIDE_LONG:int = 1
 SIDE_SHORT:int  = -1

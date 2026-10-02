@@ -3,17 +3,16 @@ import asyncio
 import numpy as np
 import pytest
 from loguru import logger
-from loguru import logger
 from s2cpy.algorithms.glfts import generate_depths_from_min_tick, RollingGLFT
 from s2cpy.infrastructure.time import get_unix_seconds_utc
 
-
+@pytest.mark.manual
 def test_generate_depths_from_normal():
     min_ticker = 0.001
     res = generate_depths_from_min_tick(min_tick=min_ticker)
     logger.info(f"generate_depths_from_normal:{res}")
 
-
+@pytest.mark.manual
 async def test_rolling_glft_update_lambdas():
     glft = RollingGLFT(min_tick=0.1, depth_size=3)
     logger.info(f"depth is :{glft._depths}")

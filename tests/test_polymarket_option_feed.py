@@ -67,8 +67,8 @@ def test_query_pm_price_returns_dataframe_from_direct_postgres_query():
     ts = datetime.datetime(2026, 9, 23, 12, 30)
 
     with patch(
-        "s2cpy.data_feeds.polymarket_option_feed.psycopg.connect",
-        return_value=connection,
+            "s2cpy.data_feeds.polymarket_option_feed.psycopg.connect",
+            return_value=connection,
     ) as connect:
         result = make_feed().query_pm_price(ts)
 
@@ -86,17 +86,17 @@ def test_query_pm_price_returns_dataframe_from_direct_postgres_query():
 
 def test_query_pm_instruments_at_maps_rows_to_binary_options():
     rows = [
-        (1, "will-bitcoin-reach-80k_yes", "10016", "series", "market", 10, 1_800_000_000_000, "0.7")
+        (1, "will-bitcoin-reach-80k_yes", "10016", "series", "market", 10, 1_800_000_000_000, "0.7", 12345)
     ]
     connection = FakeConnection(rows, [])
 
     with patch(
-        "s2cpy.data_feeds.polymarket_option_feed.psycopg.connect",
-        return_value=connection,
+            "s2cpy.data_feeds.polymarket_option_feed.psycopg.connect",
+            return_value=connection,
     ):
         options = make_feed().query_pm_instruments_at("2026-09-23 12:30:00")
 
     assert len(options) == 1
     assert options[0].asset_slug == "will-bitcoin-reach-80k_yes"
-    assert options[0].latest_price == 0.7
-    assert options[0].expiration.timestamp() == 1_800_000_000
+    assert options[0].premium == 0.7
+    assert options[0].validate_before== 1_800_000_000_000
