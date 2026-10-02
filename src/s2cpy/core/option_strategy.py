@@ -6,7 +6,8 @@ from s2cpy.model.option import CMOption, OptionList, Leg
 def generate_butterflies(
         option_list: OptionList,
         max_distance: float = None,  # 中心距离现价超过这个值就不要（None表示不限制）
-        equal_wing: bool = True
+        equal_wing: bool = True,
+
 ) -> List[List[Leg]]:
     """
     生成靠近当前价格的蝶式（Call Butterfly + Put Butterfly）
@@ -33,9 +34,9 @@ def generate_butterflies(
                     continue
 
                 legs = [
-                    Leg(k1, 1),
-                    Leg(k2, -2),
-                    Leg(k3, 1),
+                    Leg(k1, underlying_price,1),
+                    Leg(k2, underlying_price,-2),
+                    Leg(k3, underlying_price,1),
                 ]
                 result.append(legs)
 

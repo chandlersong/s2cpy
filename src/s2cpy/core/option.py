@@ -144,16 +144,19 @@ class OptionPositon:
         self.include_close_fee = include_close_fee
         self.name = name
 
-    def calculate_fees(self) -> float:
+    def calculate_fees(self, ccy: Optional[str] = None) -> float:
         """
         希望每个交易锁不同的交易手续费。
         所以由各个交易所单独处理和计算，这里只是计算。
         :return:
         """
-        leg_ccys = {leg.base_ccy for leg in self.legs}
-        if len(leg_ccys) > 1:
-            raise ValueError("All option legs must have the same base_ccy")
-        total_fee = sum([leg.trading_fee() for leg in self.legs])
+        if ccy is not None and ccy != BASE_CRYPTO_STABLE_COIN:
+            leg_ccys = {leg.base_ccy for leg in self.legs}
+            if len(leg_ccys) > 1:
+                raise ValueError("All option legs must have the same base_ccy")
+            if leg_ccys != {ccy}:
+                raise ValueError(f"All option legs must have base_ccy {ccy!r}")
+        total_fee = sum([leg.trading_fee(ccy=ccy) for leg in self.legs])
         return total_fee
 
     """
@@ -184,54 +187,70 @@ class OptionPositon:
                 raise ValueError(f"All option legs must have base_ccy {ccy!r}")
 
         gross = np.zeros_like(coin_value, dtype=float)
+        '''
+        在计算的时候，gross是所有leg的收益曲线的总和。然后再减去手续费，得到net。
+        # ccy
+        到这里时，只有两种情况。需要对每条leg的曲线，做特殊处理。
+        - 如果ccy为BASE_CRYPTO_STABLE_COIN,且leg的base_ccy不为BASE_CRYPTO_STABLE_COIN，则返回gross和net是换算成USDT的收益曲线。
+        - 如果ccy不为BASE_CRYPTO_STABLE_COIN，则返回的net是币收益曲线。
+        '''
         for leg in self.legs:
-            gross += leg.payoff(coin_value)
+            leg_payoff = leg.payoff(coin_value)
+            if ccy == BASE_CRYPTO_STABLE_COIN and leg.base_ccy != BASE_CRYPTO_STABLE_COIN:
+                leg_payoff = leg_payoff * coin_value
+            gross += leg_payoff
 
-        total_fee = self.calculate_fees()
+        total_fee = self.calculate_fees(ccy=ccy)
         net = gross - total_fee
         return OptionPositionCurve(gross=gross, net=net, total_fee=total_fee, ccy=ccy, coin_value=coin_value)
 
-    def plot_payoff(self, S: Optional[np.ndarray] = None, figsize=(13, 7)):
+    def plot_payoff(self, S: Optional[np.ndarray] = None, figsize=(13, 7), ccy: Optional[str] = None):
         if S is None:
             strikes = [leg.option.strike for leg in self.legs]
             S = np.linspace(min(strikes) * 0.6, max(strikes) * 1.5, 600)
 
         S = np.maximum(S, 1e-8)  # 防止除零
 
-        payoff_curve = self.calculate_payoff(S)
-        net_coin = payoff_curve.net
-        # 把币收益换算成大约的 USDT 价值
-        if not payoff_curve.is_stable_coin:
-            net_usdt = payoff_curve.stable_coin_net
-        else:
-            net_usdt = payoff_curve.net
+        payoff_curve = self.calculate_payoff(S, ccy=ccy)
+        net_usdt = payoff_curve.stable_coin_net
 
         # ---------- 开始画图 ----------
         fig, ax1 = plt.subplots(figsize=figsize)
 
-        # 左轴：币收益
-        ax1.plot(S, net_coin, 'b-', linewidth=2.5, label='净收益（BTC）')
+        # 左轴：USDT 收益
+        ax1.plot(S, net_usdt, color='darkorange', linestyle='--', linewidth=2,
+                 label='净收益（USDT）')
         ax1.axhline(0, color='black', linewidth=1)
         ax1.set_xlabel('标的价格 S (USD)', fontsize=12)
-        ax1.set_ylabel('收益（BTC）', color='b', fontsize=12)
-        ax1.tick_params(axis='y', labelcolor='b')
+        ax1.set_ylabel('收益（USDT）', color='darkorange', fontsize=12)
+        ax1.tick_params(axis='y', labelcolor='darkorange')
 
-        # 右轴：USDT 价值
-        ax2 = ax1.twinx()
-        ax2.plot(S, net_usdt, color='darkorange', linestyle='--', linewidth=2, label='净收益换算 USDT')
-        ax2.set_ylabel('收益换算（USDT）', color='darkorange', fontsize=12)
-        ax2.tick_params(axis='y', labelcolor='darkorange')
+        # 稳定币计价时收益本身已是 USDT，不再重复显示币收益轴。
+        axes = [ax1]
+        if not payoff_curve.is_stable_coin:
+            ax2 = ax1.twinx()
+            ax2.plot(S, payoff_curve.net, 'b-', linewidth=2.5,
+                     label=f'净收益（{payoff_curve.ccy}）')
+            ax2.set_ylabel(f'收益（{payoff_curve.ccy}）', color='b', fontsize=12)
+            ax2.tick_params(axis='y', labelcolor='b')
+            axes.append(ax2)
 
         # 行权价参考线
         for leg in self.legs:
             ax1.axvline(leg.option.strike, color='gray', linestyle=':', alpha=0.6)
 
         # 图例合并
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
+        lines, labels = [], []
+        for axis in axes:
+            axis_lines, axis_labels = axis.get_legend_handles_labels()
+            lines.extend(axis_lines)
+            labels.extend(axis_labels)
+        ax1.legend(lines, labels, loc='best')
 
-        plt.title(f'{self.name}\n蓝色实线 = BTC收益 | 橙色虚线 = 换算成USDT的价值', fontsize=14)
+        title = f'{self.name}\n橙色虚线 = USDT收益'
+        if not payoff_curve.is_stable_coin:
+            title += f' | 蓝色实线 = {payoff_curve.ccy}收益'
+        plt.title(title, fontsize=14)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -239,7 +258,7 @@ class OptionPositon:
         # 打印关键数据
         print("=" * 65)
         print(f"策略名称       : {self.name}")
-        print(f"总手续费       : {payoff_curve.total_fee:.6f} BTC")
-        print(f"最大净收益(BTC): {np.max(net_coin):.6f} BTC")
-        print(f"最大净亏损(BTC): {np.min(net_coin):.6f} BTC")
+        print(f"总手续费       : {payoff_curve.total_fee:.6f} {payoff_curve.ccy}")
+        print(f"最大净收益({payoff_curve.ccy}): {np.max(payoff_curve.net):.6f} {payoff_curve.ccy}")
+        print(f"最大净亏损({payoff_curve.ccy}): {np.min(payoff_curve.net):.6f} {payoff_curve.ccy}")
         print("=" * 65)

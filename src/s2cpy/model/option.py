@@ -15,7 +15,7 @@ from functools import total_ordering
 from typing import Optional, List, Protocol, Final, Any, Dict
 import numpy as np
 
-from s2cpy.model.core_model import Instrument, OptionType
+from s2cpy.model.core_model import Instrument, OptionType, BASE_CRYPTO_STABLE_COIN
 
 """
 代表行权日，需求为。
@@ -198,10 +198,13 @@ class CMOption(Option):
 class Leg:
     option: Option
     premium: float
+    underlying_price: float  # 交易时的标的价格
     quantity: float = 1
 
-    def __init__(self, option: Option, quantity: Optional[float] = None, premium: Optional[float] = None):
+    def __init__(self, option: Option, underlying_price: float, quantity: Optional[float] = None,
+                 premium: Optional[float] = None):
         self.option = option
+        self.underlying_price = underlying_price
         if premium is None:
             premium = option.premium
         self.premium = premium
@@ -220,10 +223,13 @@ class Leg:
         """单腿收益（单位：币）"""
         return (self.option.intrinsic_value(S) - self.premium) * self.option.multiplier * self.quantity
 
-    def trading_fee(self, premium: float = None) -> float:
+    def trading_fee(self, premium: float = None, ccy: Optional[str] = None) -> float:
         if premium is None:
             premium = self.premium
-        return self.option.calculate_trading_fee(quantity=self.quantity, premium=premium)
+        res = self.option.calculate_trading_fee(quantity=self.quantity, premium=premium)
+        if ccy == BASE_CRYPTO_STABLE_COIN and self.base_ccy != BASE_CRYPTO_STABLE_COIN:
+            res = res * self.underlying_price
+        return res
 
 
 @dataclasses.dataclass
